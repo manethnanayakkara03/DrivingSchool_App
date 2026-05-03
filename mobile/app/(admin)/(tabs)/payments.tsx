@@ -11,6 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { paymentsApi } from '@/services/api';
+import { Alert } from 'react-native';
 
 export default function PaymentsPage() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -25,14 +27,12 @@ export default function PaymentsPage() {
 
   const fetchPayments = async () => {
     try {
-      // Mock data
-      setPayments([
-        { id: '1', learner: 'Kamal Perera', amount: 15000, date: '2023-11-20', method: 'Online', status: 'Paid' },
-        { id: '2', learner: 'Nimal Silva', amount: 20000, date: '2023-11-25', method: 'Cash', status: 'Pending' },
-        { id: '3', learner: 'Sunil Shantha', amount: 5000, date: '2023-10-15', method: 'Card', status: 'Overdue' },
-      ]);
-    } catch (error) {
+      setLoading(true);
+      const data = await paymentsApi.list();
+      setPayments(data);
+    } catch (error: any) {
       console.error(error);
+      Alert.alert('Error', error.message || 'Failed to fetch payments');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -48,12 +48,41 @@ export default function PaymentsPage() {
     fetchPayments();
   };
 
-  const markAsPaid = (id: string) => {
-    setPayments(prev => prev.map(p => p.id === id ? { ...p, status: 'Paid' } : p));
+  const markAsPaid = async (id: string) => {
+    try {
+      await paymentsApi.update(id, { status: 'Paid' });
+      fetchPayments();
+      Alert.alert('Success', 'Payment marked as paid');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update payment');
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Delete Payment',
+      'Are you sure you want to delete this payment record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await paymentsApi.remove(id);
+              fetchPayments();
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete payment');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const filteredPayments = payments.filter(p => {
-    const matchesSearch = p.learner.toLowerCase().includes(searchQuery.toLowerCase());
+    const name = p.studentName || p.learner || '';
+    const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filter === 'All' || p.status === filter;
     return matchesSearch && matchesFilter;
   });
@@ -78,46 +107,61 @@ export default function PaymentsPage() {
 
   const formatCurrency = (amount: number) => `LKR ${amount.toLocaleString()}`;
 
-  const renderItem = ({ item }: { item: any }) => (
-    <GlassCard borderRadius={16} contentStyle={styles.cardContent} accentColor={getAccentColor(item.status)}>
-      <View style={styles.cardHeader}>
-        <View style={styles.learnerRow}>
-          <View style={[styles.avatar, { backgroundColor: `${theme.primary}20` }]}>
-            <Text style={[styles.avatarText, { color: theme.primary }]}>{item.learner.charAt(0)}</Text>
+  const renderItem = ({ item }: { item: any }) => {
+    const name = item.studentName || item.learner || 'Unknown';
+    const amount = parseFloat(item.amountPaid || item.amount || '0');
+    
+    return (
+      <GlassCard borderRadius={16} contentStyle={styles.cardContent} accentColor={getAccentColor(item.status)}>
+        <View style={styles.cardHeader}>
+          <View style={styles.learnerRow}>
+            <View style={[styles.avatar, { backgroundColor: `${theme.primary}20` }]}>
+              <Text style={[styles.avatarText, { color: theme.primary }]}>{name.charAt(0)}</Text>
+            </View>
+            <View>
+              <Text style={[styles.learnerName, { color: theme.text }]}>{name}</Text>
+              <Text style={[styles.courseText, { color: theme.muted, fontSize: 12 }]}>{item.course || 'General'}</Text>
+              <Text style={[styles.dateText, { color: theme.muted }]}>{item.date}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={[styles.learnerName, { color: theme.text }]}>{item.learner}</Text>
-            <Text style={[styles.dateText, { color: theme.muted }]}>{item.date}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[styles.amountText, { color: theme.text }]}>{formatCurrency(amount)}</Text>
+            <TouchableOpacity onPress={() => handleDelete(item._id)} style={{ marginTop: 8 }}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
           </View>
         </View>
-        <Text style={[styles.amountText, { color: theme.text }]}>{formatCurrency(item.amount)}</Text>
-      </View>
 
-      <View style={styles.statusRow}>
-        <View style={styles.methodContainer}>
-          <Ionicons 
-            name={item.method === 'Cash' ? 'cash-outline' : item.method === 'Card' ? 'card-outline' : 'globe-outline'} 
-            size={16} 
-            color={theme.icon} 
-          />
-          <Text style={[styles.methodText, { color: theme.muted }]}>{item.method}</Text>
+        <View style={styles.statusRow}>
+          <View style={styles.methodContainer}>
+            <Ionicons 
+              name={item.method === 'Cash' ? 'cash-outline' : item.method === 'Card' ? 'card-outline' : 'globe-outline'} 
+              size={16} 
+              color={theme.icon} 
+            />
+            <Text style={[styles.methodText, { color: theme.muted }]}>{item.method}</Text>
+          </View>
+          <StatusBadge status={item.status} />
         </View>
-        <StatusBadge status={item.status} />
-      </View>
 
-      {item.status !== 'Paid' && (
-        <View style={styles.actionsRow}>
-          <TouchableOpacity 
-            style={[styles.payBtn, { backgroundColor: theme.success }]} 
-            onPress={() => markAsPaid(item.id)}
-          >
-            <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-            <Text style={styles.payText}>Mark as Paid</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </GlassCard>
-  );
+        {item.status !== 'Paid' && (
+          <View style={styles.actionsRow}>
+            <TouchableOpacity 
+              style={[styles.payBtn, { backgroundColor: theme.success }]} 
+              onPress={() => markAsPaid(item._id)}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+              <Text style={styles.payText}>Mark as Paid</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </GlassCard>
+    );
+  };
+
+  const totalRevenue = payments.reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
+  const completedRevenue = payments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
+  const pendingRevenue = payments.filter(p => p.status === 'Pending').reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -134,19 +178,19 @@ export default function PaymentsPage() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.summaryScroll}>
           <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Total Revenue</Text>
-            <Text style={styles.summaryValue}>LKR 1.2M</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(totalRevenue)}</Text>
             <Ionicons name="trending-up" size={24} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
           </LinearGradient>
           
           <LinearGradient colors={['#10B981', '#059669']} style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Completed</Text>
-            <Text style={styles.summaryValue}>LKR 950K</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(completedRevenue)}</Text>
             <Ionicons name="checkmark-circle" size={24} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
           </LinearGradient>
-
+ 
           <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Pending</Text>
-            <Text style={styles.summaryValue}>LKR 250K</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(pendingRevenue)}</Text>
             <Ionicons name="time" size={24} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
           </LinearGradient>
         </ScrollView>
@@ -174,7 +218,7 @@ export default function PaymentsPage() {
 
       <FlatList
         data={filteredPayments}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item._id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={

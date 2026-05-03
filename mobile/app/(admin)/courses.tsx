@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity, Alert } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { coursesApi } from '@/services/api';
 
 export default function CoursesPage() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -32,13 +33,12 @@ export default function CoursesPage() {
 
   const fetchCourses = async () => {
     try {
-      // Mock data
-      setCourses([
-        { id: '1', name: 'Beginner Driving Course', duration: '30 Days', durationValue: '30', durationUnit: 'Days', price: 25000, instructor: 'Sarath Kumara', enrolled: 45, maxLearners: 50, status: 'Active', topics: ['Basic Controls', 'Road Signs'] },
-        { id: '2', name: 'Advanced Highway Driving', duration: '2 Weeks', durationValue: '2', durationUnit: 'Weeks', price: 15000, instructor: 'Nishantha Silva', enrolled: 12, maxLearners: 20, status: 'Draft', topics: ['Highway Entry', 'High Speed Control'] },
-      ]);
-    } catch (error) {
-      console.error(error);
+      setLoading(true);
+      const data = await coursesApi.list();
+      setCourses(data);
+    } catch (error: any) {
+      console.error('Fetch courses error:', error);
+      Alert.alert('Error', error.message || 'Failed to fetch courses');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -64,23 +64,38 @@ export default function CoursesPage() {
     setDeleteDialogVisible(true);
   };
 
-  const confirmDelete = () => {
-    setCourses(prev => prev.filter(c => c.id !== selectedCourse.id));
-    setDeleteDialogVisible(false);
-  };
-
-  const handleFormSubmit = (data: any) => {
-    if (selectedCourse) {
-      // Edit
-      setCourses(prev => prev.map(c => c.id === selectedCourse.id ? { ...c, ...data } : c));
-    } else {
-      // Add
-      setCourses(prev => [{ ...data, id: Math.random().toString(), enrolled: 0 }, ...prev]);
+  const confirmDelete = async () => {
+    if (!selectedCourse?._id) return;
+    try {
+      await coursesApi.remove(selectedCourse._id);
+      setCourses(prev => prev.filter(c => c._id !== selectedCourse._id));
+      setDeleteDialogVisible(false);
+      Alert.alert('Success', 'Course deleted successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to delete course');
     }
-    setFormVisible(false);
   };
 
-  const filteredCourses = courses.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const handleFormSubmit = async (data: any) => {
+    try {
+      if (selectedCourse?._id) {
+        // Edit
+        const updated = await coursesApi.update(selectedCourse._id, data);
+        setCourses(prev => prev.map(c => c._id === selectedCourse._id ? updated : c));
+        Alert.alert('Success', 'Course updated successfully');
+      } else {
+        // Add
+        const created = await coursesApi.create(data);
+        setCourses(prev => [created, ...prev]);
+        Alert.alert('Success', 'Course created successfully');
+      }
+      setFormVisible(false);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to save course');
+    }
+  };
+
+  const filteredCourses = courses.filter(c => (c.title || c.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
   const getAccentColor = (status: string) => {
     if (status === 'Active') return theme.success;
@@ -88,13 +103,13 @@ export default function CoursesPage() {
     return '#EF4444'; // Archived
   };
 
-  const formatCurrency = (amount: number) => `LKR ${amount.toLocaleString()}`;
+  const formatCurrency = (amount: number) => `LKR ${(amount || 0).toLocaleString()}`;
 
   const renderItem = ({ item }: { item: any }) => (
     <GlassCard borderRadius={16} contentStyle={styles.cardContent} accentColor={getAccentColor(item.status)}>
       <View style={styles.cardHeader}>
         <View style={styles.titleRow}>
-          <Text style={[styles.courseName, { color: theme.text }]}>{item.name}</Text>
+          <Text style={[styles.courseName, { color: theme.text }]}>{item.title || item.name}</Text>
           <StatusBadge status={item.status} />
         </View>
       </View>
@@ -103,6 +118,14 @@ export default function CoursesPage() {
         <View style={styles.infoCol}>
           <Ionicons name="time-outline" size={16} color={theme.primary} />
           <Text style={[styles.infoText, { color: theme.text }]}>{item.duration}</Text>
+        </View>
+        <View style={styles.infoCol}>
+          <Ionicons name="car-outline" size={16} color={theme.primary} />
+          <Text style={[styles.infoText, { color: theme.text, textTransform: 'capitalize' }]}>{item.type || 'Manual'}</Text>
+        </View>
+        <View style={styles.infoCol}>
+          <Ionicons name="list-outline" size={16} color={theme.primary} />
+          <Text style={[styles.infoText, { color: theme.text }]}>{item.totalTasks || 0} Tasks</Text>
         </View>
         <View style={styles.infoCol}>
           <Ionicons name="cash-outline" size={16} color={theme.success} />
@@ -114,18 +137,20 @@ export default function CoursesPage() {
         <Text style={[styles.instructorLabel, { color: theme.muted }]}>Assigned Instructor</Text>
         <View style={styles.instructorRow}>
           <View style={[styles.avatarSmall, { backgroundColor: `${theme.primary}20` }]}>
-            <Text style={[styles.avatarSmallText, { color: theme.primary }]}>{item.instructor ? item.instructor.charAt(0) : '?'}</Text>
+            <Text style={[styles.avatarSmallText, { color: theme.primary }]}>
+              {item.assignedInstructor ? item.assignedInstructor.charAt(0) : (item.instructor ? item.instructor.charAt(0) : '?')}
+            </Text>
           </View>
-          <Text style={[styles.instructorName, { color: theme.text }]}>{item.instructor || 'Unassigned'}</Text>
+          <Text style={[styles.instructorName, { color: theme.text }]}>{item.assignedInstructor || item.instructor || 'Unassigned'}</Text>
         </View>
       </View>
 
       <View style={[styles.enrollmentBox, { backgroundColor: theme.background }]}>
         <Text style={[styles.enrollmentLabel, { color: theme.muted }]}>Enrollment</Text>
         <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: `${(item.enrolled / item.maxLearners) * 100}%`, backgroundColor: theme.primary }]} />
+          <View style={[styles.progressBar, { width: `${((item.enrolled || 0) / (item.maxLearners || 50)) * 100}%`, backgroundColor: theme.primary }]} />
         </View>
-        <Text style={[styles.enrollmentCount, { color: theme.text }]}>{item.enrolled} / {item.maxLearners} Learners</Text>
+        <Text style={[styles.enrollmentCount, { color: theme.text }]}>{item.enrolled || 0} / {item.maxLearners || 50} Learners</Text>
       </View>
 
       <View style={styles.actionsRow}>
@@ -169,7 +194,7 @@ export default function CoursesPage() {
 
       <FlatList
         data={filteredCourses}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item._id || item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -205,7 +230,7 @@ export default function CoursesPage() {
       <ConfirmDialog
         visible={deleteDialogVisible}
         title="Delete Course"
-        message={`Are you sure you want to delete ${selectedCourse?.name}? This action cannot be undone.`}
+        message={`Are you sure you want to delete ${selectedCourse?.title || selectedCourse?.name}? This action cannot be undone.`}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteDialogVisible(false)}
         confirmLabel="Delete"

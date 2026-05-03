@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Modal, TouchableOpacity, Text, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Modal, TouchableOpacity, Text, KeyboardAvoidingView, Platform, ActivityIndicator, FlatList } from 'react-native';
+import { vehiclesApi } from '@/services/api';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,15 +19,37 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
 
   const [formData, setFormData] = useState({
     vehicle: '',
+    vehicleModel: '',
     type: 'Service',
-    date: new Date().toISOString().split('T')[0], // simple date default
+    date: new Date().toISOString().split('T')[0],
     notes: '',
-    estimatedCost: '',
+    cost: '',
     status: 'Pending',
   });
 
   const [loading, setLoading] = useState(false);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [fetchingVehicles, setFetchingVehicles] = useState(false);
+  const [vehiclePickerVisible, setVehiclePickerVisible] = useState(false);
   const [errors, setErrors] = useState<any>({});
+
+  useEffect(() => {
+    if (visible) {
+      fetchVehicles();
+    }
+  }, [visible]);
+
+  const fetchVehicles = async () => {
+    try {
+      setFetchingVehicles(true);
+      const data = await vehiclesApi.list();
+      setVehicles(data);
+    } catch (error) {
+      console.error('Error fetching vehicles:', error);
+    } finally {
+      setFetchingVehicles(false);
+    }
+  };
 
   const validate = () => {
     let newErrors: any = {};
@@ -40,10 +63,13 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
   const handleSubmit = async () => {
     if (validate()) {
       setLoading(true);
-      setTimeout(() => {
-        onSubmit(formData);
+      try {
+        await onSubmit(formData);
+      } catch (error) {
+        console.error(error);
+      } finally {
         setLoading(false);
-      }, 1000);
+      }
     }
   };
 
@@ -83,13 +109,31 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
           </View>
 
           <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+            <Text style={[styles.pickerLabel, { color: theme.text }]}>Select Vehicle</Text>
+            <TouchableOpacity 
+              style={[
+                styles.dropdownTrigger, 
+                { backgroundColor: theme.background, borderColor: errors.vehicle ? '#EF4444' : theme.glassBorder }
+              ]}
+              onPress={() => setVehiclePickerVisible(true)}
+            >
+              <View style={styles.dropdownContent}>
+                <Ionicons name="car-outline" size={20} color={theme.icon} style={{ marginRight: 10 }} />
+                <Text style={{ color: formData.vehicle ? theme.text : theme.muted, fontSize: 16 }}>
+                  {formData.vehicle || 'Tap to select vehicle'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={theme.muted} />
+            </TouchableOpacity>
+            {errors.vehicle && <Text style={styles.errorText}>{errors.vehicle}</Text>}
+            <View style={{ height: 16 }} />
+
             <FormInput
-              label="Select Vehicle"
-              placeholder="e.g. WP CAA-1234"
-              icon="car-outline"
-              value={formData.vehicle}
-              onChangeText={(t) => setFormData({...formData, vehicle: t})}
-              error={errors.vehicle}
+              label="Vehicle Model"
+              placeholder="e.g. Toyota Prius"
+              icon="information-circle-outline"
+              value={formData.vehicleModel}
+              onChangeText={(t) => setFormData({...formData, vehicleModel: t})}
             />
 
             {renderPicker('Maintenance Type', formData.type, ['Service', 'Repair', 'Inspection'], (v) => setFormData({...formData, type: v}))}
@@ -104,12 +148,12 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
             />
 
             <FormInput
-              label="Estimated Cost (LKR)"
+              label="Cost (LKR)"
               placeholder="e.g. 15000"
               icon="cash-outline"
               keyboardType="numeric"
-              value={formData.estimatedCost}
-              onChangeText={(t) => setFormData({...formData, estimatedCost: t})}
+              value={formData.cost}
+              onChangeText={(t) => setFormData({...formData, cost: t})}
             />
 
             <FormInput
@@ -140,6 +184,53 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Vehicle Selection Modal */}
+      <Modal visible={vehiclePickerVisible} transparent animationType="fade">
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerModal, { backgroundColor: theme.card, borderColor: theme.glassBorder }]}>
+            <View style={[styles.pickerHeader, { borderBottomColor: theme.glassBorder }]}>
+              <Text style={[styles.pickerTitle, { color: theme.text }]}>Select Vehicle</Text>
+              <TouchableOpacity onPress={() => setVehiclePickerVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.icon} />
+              </TouchableOpacity>
+            </View>
+
+            {fetchingVehicles ? (
+              <ActivityIndicator style={{ padding: 40 }} color={theme.primary} />
+            ) : (
+              <FlatList
+                data={vehicles}
+                keyExtractor={(item) => item._id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.vehicleItem, { borderBottomColor: theme.glassBorder }]}
+                    onPress={() => {
+                      setFormData({
+                        ...formData,
+                        vehicle: item.registrationNumber,
+                        vehicleModel: `${item.maker} ${item.model}`
+                      });
+                      setVehiclePickerVisible(false);
+                    }}
+                  >
+                    <View style={styles.vehicleInfo}>
+                      <Text style={[styles.vehicleRegText, { color: theme.text }]}>{item.registrationNumber}</Text>
+                      <Text style={[styles.vehicleModelText, { color: theme.muted }]}>{item.maker} {item.model}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.muted} />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={{ padding: 40, alignItems: 'center' }}>
+                    <Text style={{ color: theme.muted }}>No vehicles found</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -213,5 +304,64 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  dropdownTrigger: {
+    height: 52,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+  },
+  dropdownContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  pickerModal: {
+    maxHeight: '70%',
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  vehicleItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  vehicleInfo: {
+    flex: 1,
+  },
+  vehicleRegText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  vehicleModelText: {
+    fontSize: 13,
   },
 });

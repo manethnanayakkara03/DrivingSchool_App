@@ -19,7 +19,7 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
 
   const [formData, setFormData] = useState({
     registrationNumber: initialData?.registrationNumber || '',
-    make: initialData?.make || '',
+    maker: initialData?.maker || '',
     model: initialData?.model || '',
     year: initialData?.year?.toString() || '',
     transmission: initialData?.transmission || 'Manual',
@@ -35,7 +35,7 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
   const validate = () => {
     let newErrors: any = {};
     if (!formData.registrationNumber) newErrors.registrationNumber = 'Reg number is required';
-    if (!formData.make) newErrors.make = 'Make is required';
+    if (!formData.maker) newErrors.maker = 'Make is required';
     if (!formData.model) newErrors.model = 'Model is required';
     if (!formData.year) newErrors.year = 'Year is required';
 
@@ -46,10 +46,11 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
   const handleSubmit = async () => {
     if (validate()) {
       setLoading(true);
-      setTimeout(() => {
-        onSubmit(formData);
+      try {
+        await onSubmit(formData);
+      } finally {
         setLoading(false);
-      }, 1000);
+      }
     }
   };
 
@@ -103,9 +104,9 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
                 <FormInput
                   label="Make"
                   placeholder="e.g. Toyota"
-                  value={formData.make}
-                  onChangeText={(t) => setFormData({...formData, make: t})}
-                  error={errors.make}
+                  value={formData.maker}
+                  onChangeText={(t) => setFormData({...formData, maker: t})}
+                  error={errors.maker}
                 />
               </View>
               <View style={styles.half}>

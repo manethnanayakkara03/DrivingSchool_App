@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { vehiclesApi } from '@/services/api';
 
 export default function VehiclesPage() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -34,13 +35,12 @@ export default function VehiclesPage() {
 
   const fetchVehicles = async () => {
     try {
-      // Mock data for UI redesign
-      setVehicles([
-        { id: '1', registrationNumber: 'WP CAA-1234', make: 'Toyota', model: 'Prius', year: 2018, transmission: 'Automatic', fuelType: 'Hybrid', assignedInstructor: 'Sarath Kumara', status: 'Active', condition: 'Good' },
-        { id: '2', registrationNumber: 'WP CAR-5678', make: 'Suzuki', model: 'Alto', year: 2020, transmission: 'Manual', fuelType: 'Petrol', assignedInstructor: 'Nishantha Silva', status: 'Under Maintenance', condition: 'Fair' },
-      ]);
-    } catch (error) {
+      setLoading(true);
+      const data = await vehiclesApi.list();
+      setVehicles(data);
+    } catch (error: any) {
       console.error(error);
+      Alert.alert('Error', error.message || 'Failed to fetch vehicles');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -71,37 +71,57 @@ export default function VehiclesPage() {
     setMaintenanceDialogVisible(true);
   };
 
-  const confirmDelete = () => {
-    setVehicles(prev => prev.filter(v => v.id !== selectedVehicle.id));
-    setDeleteDialogVisible(false);
-  };
-
-  const confirmMaintenance = () => {
-    setVehicles(prev => prev.map(v => v.id === selectedVehicle.id ? { ...v, status: 'Under Maintenance' } : v));
-    setMaintenanceDialogVisible(false);
-  };
-
-  const handleFormSubmit = (data: any) => {
-    if (selectedVehicle) {
-      // Edit
-      setVehicles(prev => prev.map(v => v.id === selectedVehicle.id ? { ...v, ...data } : v));
-    } else {
-      // Add
-      setVehicles(prev => [{ ...data, id: Math.random().toString() }, ...prev]);
+  const confirmDelete = async () => {
+    if (!selectedVehicle?._id) return;
+    try {
+      await vehiclesApi.remove(selectedVehicle._id);
+      setVehicles(prev => prev.filter(v => v._id !== selectedVehicle._id));
+      setDeleteDialogVisible(false);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to delete vehicle');
     }
-    setFormVisible(false);
   };
 
-  const filteredVehicles = vehicles.filter(v => {
-    const matchesSearch = v.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          v.make.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          v.model.toLowerCase().includes(searchQuery.toLowerCase());
+  const confirmMaintenance = async () => {
+    if (!selectedVehicle?._id) return;
+    try {
+      const updated = await vehiclesApi.update(selectedVehicle._id, { status: 'Under Maintenance' });
+      setVehicles(prev => prev.map(v => v._id === selectedVehicle._id ? updated : v));
+      setMaintenanceDialogVisible(false);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update status');
+    }
+  };
+
+  const handleFormSubmit = async (data: any) => {
+    try {
+      if (selectedVehicle?._id) {
+        // Edit
+        const updated = await vehiclesApi.update(selectedVehicle._id, data);
+        setVehicles(prev => prev.map(v => v._id === selectedVehicle._id ? updated : v));
+      } else {
+        // Add
+        const created = await vehiclesApi.create(data);
+        setVehicles(prev => [created, ...prev]);
+      }
+      setFormVisible(false);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to save vehicle');
+      throw error; // Re-throw to let Form know it failed
+    }
+  };
+
+  const filteredVehicles = Array.isArray(vehicles) ? vehicles.filter(v => {
+    if (!v) return false;
+    const matchesSearch = (v.registrationNumber?.toLowerCase() || '').includes(searchQuery.toLowerCase()) || 
+                          (v.maker?.toLowerCase() || '').includes(searchQuery.toLowerCase()) || 
+                          (v.model?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     let matchesFilter = true;
     if (filter === 'Active') matchesFilter = v.status === 'Active';
     if (filter === 'Maintenance') matchesFilter = v.status === 'Under Maintenance';
     
     return matchesSearch && matchesFilter;
-  });
+  }) : [];
 
   const renderFilterTab = (label: string) => (
     <TouchableOpacity
@@ -130,7 +150,7 @@ export default function VehiclesPage() {
           </View>
           <View>
             <Text style={[styles.regNumber, { color: theme.text }]}>{item.registrationNumber}</Text>
-            <Text style={[styles.makeModel, { color: theme.muted }]}>{item.make} {item.model} • {item.year}</Text>
+            <Text style={[styles.makeModel, { color: theme.muted }]}>{item.maker} {item.model} • {item.year}</Text>
           </View>
         </View>
       </View>
@@ -203,24 +223,28 @@ export default function VehiclesPage() {
         {renderFilterTab('Maintenance')}
       </View>
 
-      <FlatList
-        data={filteredVehicles}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
-        }
-        ListEmptyComponent={
-          !loading ? (
+      {loading && !refreshing ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredVehicles}
+          keyExtractor={(item, index) => String(item._id || item.id || index)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+          }
+          ListEmptyComponent={
             <EmptyState 
               icon="car-sport-outline" 
               title="No Vehicles Found" 
               message="There are no vehicles matching your criteria." 
             />
-          ) : null
-        }
-      />
+          }
+        />
+      )}
 
       <AdminFAB 
         onPress={() => {
@@ -317,6 +341,11 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingBottom: 100, // padding for FAB
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardContent: {
     padding: 16,

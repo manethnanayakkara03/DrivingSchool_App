@@ -12,6 +12,8 @@ import { MaintenanceForm } from '@/components/admin/forms/MaintenanceForm';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { maintenanceApi } from '@/services/api';
+import { Alert } from 'react-native';
 
 export default function MaintenancePage() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -27,14 +29,12 @@ export default function MaintenancePage() {
 
   const fetchRecords = async () => {
     try {
-      // Mock data
-      setMaintenanceRecords([
-        { id: '1', vehicle: 'WP CAA-1234', model: 'Toyota Prius', type: 'Service', date: '2023-11-20', status: 'Pending', notes: 'Regular 10,000km service' },
-        { id: '2', vehicle: 'WP CAR-5678', model: 'Suzuki Alto', type: 'Repair', date: '2023-11-18', status: 'In Progress', notes: 'Brake pad replacement' },
-        { id: '3', vehicle: 'WP CBE-9012', model: 'Honda Fit', type: 'Inspection', date: '2023-11-10', status: 'Completed', notes: 'Annual eco test and fitness' },
-      ]);
-    } catch (error) {
+      setLoading(true);
+      const data = await maintenanceApi.list();
+      setMaintenanceRecords(data);
+    } catch (error: any) {
       console.error(error);
+      Alert.alert('Error', error.message || 'Failed to fetch maintenance records');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -50,13 +50,46 @@ export default function MaintenancePage() {
     fetchRecords();
   };
 
-  const handleFormSubmit = (data: any) => {
-    setMaintenanceRecords(prev => [{ ...data, id: Math.random().toString(), model: 'Unknown Model' }, ...prev]);
-    setFormVisible(false);
+  const handleFormSubmit = async (data: any) => {
+    try {
+      await maintenanceApi.create(data);
+      setFormVisible(false);
+      fetchRecords();
+      Alert.alert('Success', 'Maintenance record added successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to add record');
+    }
   };
 
-  const markAsComplete = (id: string) => {
-    setMaintenanceRecords(prev => prev.map(m => m.id === id ? { ...m, status: 'Completed' } : m));
+  const markAsComplete = async (id: string) => {
+    try {
+      await maintenanceApi.update(id, { status: 'Completed' });
+      fetchRecords();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update record');
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Delete Record',
+      'Are you sure you want to delete this maintenance record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await maintenanceApi.remove(id);
+              fetchRecords();
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete record');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const filteredRecords = maintenanceRecords.filter(m => filter === 'All' || m.status === filter);
@@ -88,10 +121,15 @@ export default function MaintenancePage() {
           </View>
           <View>
             <Text style={[styles.vehicleReg, { color: theme.text }]}>{item.vehicle}</Text>
-            <Text style={[styles.vehicleModel, { color: theme.muted }]}>{item.model}</Text>
+            <Text style={[styles.vehicleModel, { color: theme.muted }]}>{item.vehicleModel || 'Unknown Model'}</Text>
           </View>
         </View>
-        <StatusBadge status={item.status} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <StatusBadge status={item.status} />
+          <TouchableOpacity onPress={() => handleDelete(item._id)}>
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.detailsGrid}>
@@ -115,7 +153,7 @@ export default function MaintenancePage() {
         <View style={styles.actionsRow}>
           <TouchableOpacity 
             style={[styles.completeBtn, { backgroundColor: theme.success }]} 
-            onPress={() => markAsComplete(item.id)}
+            onPress={() => markAsComplete(item._id)}
           >
             <Ionicons name="checkmark-circle" size={18} color="#FFF" />
             <Text style={styles.completeText}>Mark as Complete</Text>
@@ -148,7 +186,7 @@ export default function MaintenancePage() {
 
       <FlatList
         data={filteredRecords}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item._id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Modal, TouchableOpacity, Text, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { FormInput } from '../FormInput';
 import { LinearGradient } from 'expo-linear-gradient';
+import { instructorsApi } from '@/services/api';
 
 interface CourseFormProps {
   visible: boolean;
@@ -17,25 +18,55 @@ export const CourseForm: React.FC<CourseFormProps> = ({ visible, onClose, onSubm
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
+  // Helper to parse duration string (e.g. "30 Days")
+  const parseDuration = (dur: string) => {
+    if (!dur) return { value: '', unit: 'Days' };
+    const parts = dur.split(' ');
+    return {
+      value: parts[0] || '',
+      unit: parts[1] || 'Days'
+    };
+  };
+
+  const initialDuration = parseDuration(initialData?.duration);
+
   const [formData, setFormData] = useState({
-    name: initialData?.name || '',
+    title: initialData?.title || '',
     description: initialData?.description || '',
-    durationValue: initialData?.durationValue?.toString() || '',
-    durationUnit: initialData?.durationUnit || 'Days',
+    durationValue: initialDuration.value,
+    durationUnit: initialDuration.unit,
     price: initialData?.price?.toString() || '',
-    instructor: initialData?.instructor || '',
-    maxLearners: initialData?.maxLearners?.toString() || '',
+    assignedInstructor: initialData?.assignedInstructor || '',
+    maxLearners: initialData?.maxLearners?.toString() || '50',
     status: initialData?.status || 'Active',
-    topics: initialData?.topics || [],
+    type: initialData?.type || 'manual',
+    totalTasks: initialData?.totalTasks?.toString() || '10',
   });
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
-  const [newTopic, setNewTopic] = useState('');
+  const [instructors, setInstructors] = useState<any[]>([]);
+  const [fetchingInstructors, setFetchingInstructors] = useState(false);
+
+  useEffect(() => {
+    const fetchInstructors = async () => {
+      try {
+        setFetchingInstructors(true);
+        const data = await instructorsApi.list();
+        setInstructors(data);
+      } catch (err) {
+        console.error('Fetch instructors error:', err);
+      } finally {
+        setFetchingInstructors(false);
+      }
+    };
+    fetchInstructors();
+  }, []);
 
   const validate = () => {
     let newErrors: any = {};
-    if (!formData.name) newErrors.name = 'Course name is required';
+    if (!formData.title) newErrors.title = 'Course title is required';
+    if (!formData.description) newErrors.description = 'Description is required';
     if (!formData.price) newErrors.price = 'Price is required';
     if (!formData.durationValue) newErrors.durationValue = 'Duration is required';
 
@@ -46,27 +77,27 @@ export const CourseForm: React.FC<CourseFormProps> = ({ visible, onClose, onSubm
   const handleSubmit = async () => {
     if (validate()) {
       setLoading(true);
-      setTimeout(() => {
-        // Construct full duration string
-        const finalData = {
-          ...formData,
-          duration: `${formData.durationValue} ${formData.durationUnit}`,
-        };
-        onSubmit(finalData);
+      // Construct final object
+      const finalData = {
+        ...formData,
+        price: Number(formData.price),
+        maxLearners: Number(formData.maxLearners),
+        totalTasks: Number(formData.totalTasks),
+        duration: `${formData.durationValue} ${formData.durationUnit}`,
+      };
+      
+      // Remove helper fields not needed in backend
+      delete (finalData as any).durationValue;
+      delete (finalData as any).durationUnit;
+
+      try {
+        await onSubmit(finalData);
+      } catch (err) {
+        console.error('Form submit error:', err);
+      } finally {
         setLoading(false);
-      }, 1000);
+      }
     }
-  };
-
-  const addTopic = () => {
-    if (newTopic.trim()) {
-      setFormData(prev => ({ ...prev, topics: [...prev.topics, newTopic.trim()] }));
-      setNewTopic('');
-    }
-  };
-
-  const removeTopic = (index: number) => {
-    setFormData(prev => ({ ...prev, topics: prev.topics.filter((_: string, i: number) => i !== index) }));
   };
 
   const renderPicker = (label: string, value: string, options: string[], onSelect: (val: string) => void) => (
@@ -106,12 +137,12 @@ export const CourseForm: React.FC<CourseFormProps> = ({ visible, onClose, onSubm
 
           <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
             <FormInput
-              label="Course Name"
+              label="Course Title"
               placeholder="e.g. Basic Driving Package"
               icon="book-outline"
-              value={formData.name}
-              onChangeText={(t) => setFormData({...formData, name: t})}
-              error={errors.name}
+              value={formData.title}
+              onChangeText={(t) => setFormData({...formData, title: t})}
+              error={errors.title}
             />
 
             <FormInput
@@ -123,6 +154,7 @@ export const CourseForm: React.FC<CourseFormProps> = ({ visible, onClose, onSubm
               style={{ height: 100, textAlignVertical: 'top' }}
               value={formData.description}
               onChangeText={(t) => setFormData({...formData, description: t})}
+              error={errors.description}
             />
             
             <View style={styles.row}>
@@ -165,43 +197,29 @@ export const CourseForm: React.FC<CourseFormProps> = ({ visible, onClose, onSubm
               </View>
             </View>
 
+            {fetchingInstructors ? (
+              <ActivityIndicator size="small" color={theme.primary} style={{ marginVertical: 10 }} />
+            ) : (
+              renderPicker(
+                'Assign Instructor (Optional)', 
+                formData.assignedInstructor, 
+                ['None', ...instructors.map(ins => ins.name)], 
+                (v) => setFormData({...formData, assignedInstructor: v === 'None' ? '' : v})
+              )
+            )}
+
+            {renderPicker('Transmission Type', formData.type, ['manual', 'auto', 'both'], (v) => setFormData({...formData, type: v}))}
+
             <FormInput
-              label="Assign Instructor (Optional)"
-              placeholder="e.g. Sarath Kumara"
-              icon="person-outline"
-              value={formData.instructor}
-              onChangeText={(t) => setFormData({...formData, instructor: t})}
+              label="Total Lessons / Tasks"
+              placeholder="e.g. 15"
+              icon="list-outline"
+              keyboardType="numeric"
+              value={formData.totalTasks}
+              onChangeText={(t) => setFormData({...formData, totalTasks: t})}
             />
 
             {renderPicker('Status', formData.status, ['Active', 'Draft', 'Archived'], (v) => setFormData({...formData, status: v}))}
-
-            {/* Dynamic Topics List */}
-            <View style={styles.topicsContainer}>
-              <Text style={[styles.pickerLabel, { color: theme.text }]}>Included Lessons / Topics</Text>
-              
-              {formData.topics.map((topic: string, index: number) => (
-                <View key={index} style={[styles.topicItem, { backgroundColor: theme.background, borderColor: theme.glassBorder }]}>
-                  <Text style={[styles.topicText, { color: theme.text }]}>{topic}</Text>
-                  <TouchableOpacity onPress={() => removeTopic(index)}>
-                    <Ionicons name="close-circle" size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <View style={styles.addTopicRow}>
-                <FormInput
-                  label=""
-                  placeholder="Add a new topic..."
-                  value={newTopic}
-                  onChangeText={setNewTopic}
-                  style={{ height: 44 }}
-                  onSubmitEditing={addTopic}
-                />
-                <TouchableOpacity style={[styles.addTopicBtn, { backgroundColor: theme.primary }]} onPress={addTopic}>
-                  <Ionicons name="add" size={24} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
 
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -282,36 +300,6 @@ const styles = StyleSheet.create({
   pickerText: {
     fontWeight: '600',
     fontSize: 13,
-  },
-  topicsContainer: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  topicItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  topicText: {
-    flex: 1,
-  },
-  addTopicRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginTop: 8,
-  },
-  addTopicBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 26, // align with input
   },
   footer: {
     padding: 20,

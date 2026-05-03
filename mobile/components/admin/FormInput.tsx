@@ -22,16 +22,25 @@ export const FormInput: React.FC<FormInputProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
+      {label ? <Text style={[styles.label, { color: theme.text }]}>{label}</Text> : null}
       <View style={[
         styles.inputContainer,
         { 
           backgroundColor: theme.background,
           borderColor: error ? '#EF4444' : theme.glassBorder,
+          minHeight: 52,
+          height: props.multiline ? 'auto' : 52,
+          alignItems: props.multiline ? 'flex-start' : 'center',
+          paddingVertical: props.multiline ? 12 : 0,
         }
       ]}>
         {icon && (
-          <Ionicons name={icon} size={20} color={theme.icon} style={styles.icon} />
+          <Ionicons 
+            name={icon} 
+            size={20} 
+            color={theme.icon} 
+            style={[styles.icon, props.multiline && { marginTop: 2 }]} 
+          />
         )}
         <TextInput
           style={[styles.input, { color: theme.text }, style]}
@@ -59,7 +68,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 52,
   },
   icon: {
     marginRight: 10,
