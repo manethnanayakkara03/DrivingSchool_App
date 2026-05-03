@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "id": "admin-1",
+      "email": "arampath@driveease.com",
+      "password": "$2b$10$T2V4iE8cPHRVkInuVLAThOI4Bhg7T3dLzBXndXKrxara5aunkqoB2",
+      "name": "Admin",
+      "createdAt": "2026-05-02T16:32:33.525Z"
+    }
+  ]
+}
