@@ -7,18 +7,40 @@ import { SectionHeader } from '@/components/admin/SectionHeader';
 import { GlassCard } from '@/components/admin/GlassCard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { clearToken, clearUser } from '@/services/api';
+import { Alert } from 'react-native';
 
 export default function AdminSettingsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const navigation = useNavigation<DrawerNavigationProp<any>>();
+  const router = useRouter();
 
   // Settings State
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(colorScheme === 'dark');
   const [biometrics, setBiometrics] = useState(false);
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Log Out', 
+          style: 'destructive',
+          onPress: () => {
+            clearToken();
+            clearUser();
+            router.replace('/');
+          }
+        }
+      ]
+    );
+  };
 
   const SettingItem = ({ icon, title, subtitle, value, onValueChange, type = 'chevron', color = theme.primary }: any) => (
     <TouchableOpacity 
@@ -144,7 +166,7 @@ export default function AdminSettingsScreen() {
         </GlassCard>
 
         {/* Danger Zone */}
-        <TouchableOpacity style={styles.logoutBtn}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#EF4444" />
           <Text style={styles.logoutText}>Log Out Account</Text>
         </TouchableOpacity>

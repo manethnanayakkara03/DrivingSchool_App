@@ -74,8 +74,8 @@ export const authApi = {
 
 export const learnerApi = {
   getCourses: () => request<any[]>('GET', '/api/learner/courses'),
-  enroll: (learnerId: string, courseId: string) => 
-    request<any>('POST', '/api/learner/enroll', { learnerId, courseId }),
+  enroll: (learnerId: string, courseId: string, paymentData?: any) => 
+    request<any>('POST', '/api/learner/enroll', { learnerId, courseId, paymentData }),
   getMyCourses: (learnerId: string) => request<any[]>('GET', `/api/learner/my-courses/${learnerId}`),
   pay: (enrollmentId: string, amount: number, method: string) => 
     request<any>('POST', '/api/learner/pay', { enrollmentId, amount, method }),

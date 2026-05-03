@@ -8,11 +8,34 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { clearToken, clearUser } from '@/services/api';
+import { TouchableOpacity, Alert } from 'react-native';
 
 function CustomDrawerContent(props: any) {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Log Out', 
+          style: 'destructive',
+          onPress: () => {
+            clearToken();
+            clearUser();
+            router.replace('/');
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <DrawerContentScrollView 
@@ -35,6 +58,13 @@ function CustomDrawerContent(props: any) {
         </View>
       </View>
       <DrawerItemList {...props} />
+      
+      <View style={[styles.logoutContainer, { borderTopColor: theme.glassBorder }]}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+          <Text style={styles.logoutLabel}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
     </DrawerContentScrollView>
   );
 }
@@ -156,5 +186,22 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  logoutContainer: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    paddingHorizontal: 20,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  logoutLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });

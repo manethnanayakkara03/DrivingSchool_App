@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { learnerApi, getUser } from '@/services/api';
+import { PaymentModal } from '@/components/learner/PaymentModal';
+
 
 export default function CoursesScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -22,6 +24,10 @@ export default function CoursesScreen() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
+  
+  const [paymentVisible, setPaymentVisible] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<any>(null);
+
 
   useEffect(() => { fetchCourses(); }, []);
 
@@ -36,18 +42,36 @@ export default function CoursesScreen() {
     }
   };
 
-  const handleEnroll = async (courseId: string) => {
+  const handleEnroll = (course: any) => {
     if (!user?.id) { Alert.alert('Error', 'Please login to enroll'); return; }
-    setEnrolling(courseId);
+    setSelectedCourse(course);
+    setPaymentVisible(true);
+  };
+
+  const handlePaymentComplete = async (paymentData: any) => {
+    if (!user?.id || !selectedCourse) return;
+    
+    setEnrolling(selectedCourse.id);
     try {
-      await learnerApi.enroll(user.id, courseId);
-      Alert.alert('Enrolled!', 'Check your Home tab to track your progress.');
+      // paymentData contains method, cardDetails or slipImage
+      // We can send this to the backend
+      await learnerApi.enroll(user.id, selectedCourse.id, paymentData);
+      
+      Alert.alert(
+        'Success!', 
+        paymentData.method === 'card' 
+          ? 'Payment successful and course enrolled.' 
+          : 'Enrollment requested. Once your slip is verified, you can start the course.',
+        [{ text: 'Great', onPress: () => setPaymentVisible(false) }]
+      );
     } catch (err: any) {
       Alert.alert('Enrollment Failed', err.message || 'Could not complete enrollment');
+      throw err; // So the modal knows it failed
     } finally {
       setEnrolling(null);
     }
   };
+
 
   return (
     <ThemedView style={styles.container}>
@@ -112,9 +136,10 @@ export default function CoursesScreen() {
 
                   <TouchableOpacity
                     style={[styles.enrollBtn, { backgroundColor: theme.secondary }]}
-                    onPress={() => handleEnroll(course.id)}
+                    onPress={() => handleEnroll(course)}
                     disabled={enrolling === course.id}
                   >
+
                     {enrolling === course.id
                       ? <ActivityIndicator color="#fff" />
                       : <>
@@ -131,7 +156,15 @@ export default function CoursesScreen() {
           <View style={{ height: 110 }} />
         </ScrollView>
       </SafeAreaView>
+
+      <PaymentModal
+        visible={paymentVisible}
+        onClose={() => setPaymentVisible(false)}
+        course={selectedCourse}
+        onComplete={handlePaymentComplete}
+      />
     </ThemedView>
+
   );
 }
 

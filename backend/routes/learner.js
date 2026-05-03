@@ -30,20 +30,26 @@ router.get('/courses', async (req, res) => {
 // Enroll in a course
 router.post('/enroll', async (req, res) => {
   try {
-    const { learnerId, courseId } = req.body;
+    const { learnerId, courseId, paymentData } = req.body;
     if (!learnerId || !courseId) return res.status(400).json({ message: 'IDs required' });
 
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: 'Course not found' });
+
+    // Determine status based on payment method
+    const paymentStatus = paymentData?.method === 'card' ? 'paid' : 'pending';
+    const status = paymentData?.method === 'card' ? 'enrolled' : 'pending_approval';
 
     const enrollment = await Enrollment.create({
       learnerId,
       courseId,
       courseTitle: course.title,
       price: course.price,
-      status: 'enrolled',
-      paymentStatus: 'pending',
+      status,
+      paymentStatus,
       progress: 0,
+      paymentMethod: paymentData?.method || 'unknown',
+      paymentDetails: paymentData // Store full details (card or slip info)
     });
 
     res.json({
