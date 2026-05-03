@@ -80,6 +80,7 @@ const Vehicle     = require('./models/Vehicle');
 const Booking     = require('./models/Booking');
 const Payment     = require('./models/Payment');
 const Maintenance = require('./models/Maintenance');
+const Course      = require('./models/Course');
 
 app.use('/api/auth',        require('./routes/auth'));
 app.use('/api/learner',     require('./routes/learner'));
@@ -92,6 +93,7 @@ app.use('/api/vehicles',    crudRouter(Vehicle,     'VH'));
 app.use('/api/bookings',    crudRouter(Booking,     'BK'));
 app.use('/api/payments',    crudRouter(Payment,     'PAY'));
 app.use('/api/maintenance', crudRouter(Maintenance, 'MT'));
+app.use('/api/courses',     crudRouter(Course,      'CRS'));
 
 // Health check
 app.get('/', (req, res) => res.send('Arampath Driving School API is running ✅'));

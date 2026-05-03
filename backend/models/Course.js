@@ -7,7 +7,11 @@ const courseSchema = new mongoose.Schema({
   duration: { type: String, required: true },
   features: [{ type: String }],
   type: { type: String, enum: ['manual', 'auto', 'both'], default: 'manual' },
-  image: { type: String } // Placeholder for image URL
+  image: { type: String },
+  assignedInstructor: { type: String },
+  status: { type: String, default: 'Active' },
+  idCode: { type: String },
+  color: { type: String },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Course', courseSchema);

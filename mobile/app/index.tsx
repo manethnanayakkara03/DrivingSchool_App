@@ -30,7 +30,7 @@ export default function LoginScreen() {
       setUser(res.user);
       
       if (res.user.role === 'admin') {
-        router.replace('/(tabs)/dashboard');
+        router.replace('/(admin)/(tabs)/dashboard');
       } else if (res.user.role === 'instructor') {
         router.replace('/(instructor)/home');
       } else {
@@ -141,7 +141,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.footer}>
-              <ThemedText style={styles.footerText}>Don't have an account? </ThemedText>
+              <ThemedText style={styles.footerText}>Don&apos;t have an account? </ThemedText>
               <TouchableOpacity onPress={() => router.push('/register')}>
                 <ThemedText style={[styles.footerLink, { color: theme.primary }]}>Register Now</ThemedText>
               </TouchableOpacity>

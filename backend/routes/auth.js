@@ -66,7 +66,24 @@ router.post('/register', async (req, res) => {
       nic,
       phone,
       address,
-      role: 'learner', // Default to learner for public registration
+      role: 'learner',
+    });
+
+    // Also create a Learner record for the Admin Dashboard to manage
+    const Learner = require('../models/Learner');
+    const count = await Learner.countDocuments();
+    const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6366F1', '#EC4899'];
+    const color = COLORS[count % COLORS.length];
+    
+    await Learner.create({
+      name,
+      nic,
+      phone,
+      email: email.trim().toLowerCase(),
+      idCode: `DS-${Math.floor(1000 + Math.random() * 9000)}`,
+      color,
+      status: 'Active',
+      progress: 0
     });
 
     const token = jwt.sign(

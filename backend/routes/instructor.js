@@ -101,4 +101,54 @@ router.put('/profile/:id', async (req, res) => {
   }
 });
 
+// Admin creates instructor account
+router.post('/create-account', async (req, res) => {
+  try {
+    const { name, email, password, nic, phone, licenceType, experience, specialization, monthlySalary, status } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    // Create User (password will be hashed by pre-save hook)
+    const user = new User({
+      name,
+      email,
+      password,
+      role: 'instructor',
+      nic,
+      phone
+    });
+    await user.save();
+
+    // Generate random color and idCode for the instructor profile
+    const COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#6366F1','#EC4899'];
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const idCode = `INS-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Create Instructor profile
+    const instructor = new Instructor({
+      name,
+      email,
+      nic,
+      phone,
+      licenceType,
+      experience,
+      specialization,
+      monthlySalary,
+      status: status || 'Active',
+      idCode,
+      color
+    });
+    await instructor.save();
+
+    res.status(201).json({ message: 'Instructor account created successfully', user: { id: user._id, email: user.email, role: user.role } });
+  } catch (err) {
+    console.error('Create instructor account error:', err);
+    res.status(500).json({ message: err.message || 'Failed to create instructor account' });
+  }
+});
+
 module.exports = router;

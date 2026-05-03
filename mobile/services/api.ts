@@ -91,6 +91,7 @@ export const instructorApi = {
     request<any>('PUT', `/api/instructor/enrollment-status/${id}`, data),
   getProfile: (email: string) => request<any>('GET', `/api/instructor/profile/${email}`),
   updateProfile: (id: string, data: any) => request<any>('PUT', `/api/instructor/profile/${id}`, data),
+  createAccount: (data: any) => request<any>('POST', '/api/instructor/create-account', data),
 };
 
 // ─── dashboard ────────────────────────────────────────────────────────────────
@@ -149,6 +150,7 @@ export const vehiclesApi    = resourceApi('vehicles');
 export const bookingsApi    = resourceApi('bookings');
 export const paymentsApi    = resourceApi('payments');
 export const maintenanceApi = resourceApi('maintenance');
+export const coursesApi     = resourceApi('courses');
 
 // map screen `type` param → api object
 export const apiForType: Record<string, ReturnType<typeof resourceApi>> = {
@@ -158,4 +160,5 @@ export const apiForType: Record<string, ReturnType<typeof resourceApi>> = {
   bookings:    bookingsApi,
   payments:    paymentsApi,
   maintenance: maintenanceApi,
+  courses:     coursesApi,
 };

@@ -3,7 +3,7 @@ import {
   View, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, Alert, Platform, ActivityIndicator, FlatList,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -12,7 +12,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { apiForType, instructorsApi, vehiclesApi } from '@/services/api';
+import { apiForType, instructorsApi, vehiclesApi, instructorApi } from '@/services/api';
 
 // ─── field config per type ───────────────────────────────────────────────────
 const typeConfig: Record<string, { prefix: string; fields: { key: string; label: string; placeholder: string }[] }> = {
@@ -30,23 +30,42 @@ const typeConfig: Record<string, { prefix: string; fields: { key: string; label:
   instructors: {
     prefix: 'INS',
     fields: [
-      { key: 'name',       label: 'Full Name',   placeholder: 'Enter instructor name'   },
-      { key: 'nic',        label: 'NIC',         placeholder: 'e.g. 751234567V'         },
-      { key: 'phone',      label: 'Phone',       placeholder: '07x xxxxxxx'             },
-      { key: 'email',      label: 'Email',       placeholder: 'instructor@example.com'  },
-      { key: 'experience', label: 'Experience',  placeholder: 'e.g. 5 Years'            },
-      { key: 'specialty',  label: 'Specialty',   placeholder: 'Manual, Auto, Heavy'     },
+      { key: 'name',          label: 'Full Name',       placeholder: 'Enter instructor name' },
+      { key: 'nic',           label: 'NIC',             placeholder: 'e.g. 751234567V'       },
+      { key: 'phone',         label: 'Phone',           placeholder: '07x xxxxxxx'           },
+      { key: 'email',         label: 'Email',           placeholder: 'instructor@example.com'},
+      { key: 'password',      label: 'Temp Password',   placeholder: 'Set password (creation only)'},
+      { key: 'licenceType',   label: 'Licence Type',    placeholder: 'A, B, C'               },
+      { key: 'experience',    label: 'Experience',      placeholder: 'e.g. 5 Years'          },
+      { key: 'specialization',label: 'Specialization',  placeholder: 'Manual, Auto, Heavy'   },
+      { key: 'monthlySalary', label: 'Monthly Salary',  placeholder: 'e.g. 50000'            },
+      { key: 'status',        label: 'Status',          placeholder: 'Active / Inactive'     },
     ],
   },
   vehicles: {
     prefix: 'VH',
     fields: [
-      { key: 'name',            label: 'Vehicle Name',              placeholder: 'e.g. Toyota Vitz'          },
-      { key: 'nic',             label: 'Plate Number',              placeholder: 'WP ABC-1234'               },
-      { key: 'phone',           label: 'Fuel Type',                 placeholder: 'Petrol / Hybrid / Diesel'  },
-      { key: 'course',          label: 'Transmission',              placeholder: 'Manual / Auto'             },
-      { key: 'insuranceExpiry', label: 'Insurance Expiry',          placeholder: 'YYYY-MM-DD'                },
-      { key: 'revenueLicense',  label: 'Revenue License Expiry',    placeholder: 'YYYY-MM-DD'                },
+      { key: 'registrationNumber', label: 'Registration No',   placeholder: 'WP ABC-1234'      },
+      { key: 'maker',              label: 'Maker',             placeholder: 'Toyota, Honda'    },
+      { key: 'model',              label: 'Model',             placeholder: 'Vitz, Aqua'       },
+      { key: 'year',               label: 'Year',              placeholder: '2015'             },
+      { key: 'transmission',       label: 'Transmission',      placeholder: 'Auto / Manual'    },
+      { key: 'fuelType',           label: 'Fuel Type',         placeholder: 'Petrol / Diesel'  },
+      { key: 'assignedInstructor', label: 'Instructor ID',     placeholder: 'INS-001'          },
+      { key: 'status',             label: 'Status',            placeholder: 'Active / Repair'  },
+      { key: 'condition',          label: 'Condition',         placeholder: 'Good / Fair'      },
+    ],
+  },
+  courses: {
+    prefix: 'CRS',
+    fields: [
+      { key: 'title',              label: 'Course Title',      placeholder: 'Full Package'     },
+      { key: 'description',        label: 'Description',       placeholder: 'Course details'   },
+      { key: 'price',              label: 'Price',             placeholder: 'e.g. 15000'       },
+      { key: 'duration',           label: 'Duration',          placeholder: 'e.g. 3 Months'    },
+      { key: 'type',               label: 'Type',              placeholder: 'manual / auto'    },
+      { key: 'assignedInstructor', label: 'Assigned Instructor',placeholder: 'INS-001'       },
+      { key: 'status',             label: 'Status',            placeholder: 'Active'           },
     ],
   },
   bookings: {
@@ -238,8 +257,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 // ─── main component ──────────────────────────────────────────────────────────
-export default function ManagementScreen() {
-  const { type } = useLocalSearchParams<{ type: string }>();
+export default function CRUDView({ type }: { type: string }) {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
@@ -402,15 +420,24 @@ export default function ManagementScreen() {
       if (!date) { Alert.alert('Error', 'Please enter payment date'); return; }
       if (!status) { Alert.alert('Error', 'Please enter payment status'); return; }
     } else {
-      const nameVal = formVals['name']?.trim();
-      if (!nameVal) { Alert.alert('Error', 'Please enter a name'); return; }
+      const mainVal = formVals['name']?.trim() || formVals['title']?.trim() || formVals['registrationNumber']?.trim();
+      if (!mainVal) { Alert.alert('Error', 'Please enter a name or identifier'); return; }
     }
 
     setSaving(true);
     try {
       const payload: any = { image: addImage };
       config.fields.forEach(f => { payload[f.key] = formVals[f.key] ?? ''; });
-      const created = await api.create(payload);
+      
+      let created;
+      if (type === 'instructors') {
+        const res = await instructorApi.createAccount(payload);
+        created = { ...payload, id: res.user?.id || Math.random().toString() }; // Optimistic update, fetch will reload anyway
+        fetchList(); // Refresh to get the actual instructor doc
+      } else {
+        created = await api.create(payload);
+      }
+      
       setDataList(prev => [created, ...prev]);
       setShowAdd(false);
     } catch (err: any) {
@@ -489,7 +516,8 @@ export default function ManagementScreen() {
       if (!date) { Alert.alert('Error', 'Please enter payment date'); return; }
       if (!status) { Alert.alert('Error', 'Please enter payment status'); return; }
     } else {
-      if (!editVals['name']?.trim()) { Alert.alert('Error','Name cannot be empty'); return; }
+      const mainVal = editVals['name']?.trim() || editVals['title']?.trim() || editVals['registrationNumber']?.trim();
+      if (!mainVal) { Alert.alert('Error', 'Name or identifier cannot be empty'); return; }
     }
     
     setSaving(true);
@@ -546,7 +574,7 @@ export default function ManagementScreen() {
         ) : dataList.length === 0 ? (
           <GlassView style={{ padding: 30, alignItems: 'center' }} intensity={15}>
             <Ionicons name="folder-open-outline" size={48} color={theme.icon} />
-            <ThemedText style={{ marginTop: 12, opacity: 0.5 }}>No records yet. Tap "Add" to get started.</ThemedText>
+            <ThemedText style={{ marginTop: 12, opacity: 0.5 }}>No records yet. Tap &quot;Add&quot; to get started.</ThemedText>
           </GlassView>
         ) : (
           <View style={styles.list}>
@@ -557,11 +585,11 @@ export default function ManagementScreen() {
                 <View style={[styles.avatarContainer, { backgroundColor: item.color || theme.primary }]}>
                   {item.image
                     ? <Image source={{ uri: item.image }} style={styles.avatarImage} contentFit="cover" />
-                    : <ThemedText style={styles.avatarText}>{item.name?.charAt(0)}</ThemedText>}
+                    : <ThemedText style={styles.avatarText}>{(item.name || item.title || item.registrationNumber || '?').charAt(0)}</ThemedText>}
                 </View>
                 <View style={styles.itemIdentity}>
-                  <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                  <ThemedText style={styles.itemSubText}>{item.idCode} • NIC: {item.nic}</ThemedText>
+                  <ThemedText style={styles.itemName}>{item.name || item.title || item.registrationNumber}</ThemedText>
+                  <ThemedText style={styles.itemSubText}>{item.idCode} {item.nic ? `• NIC: ${item.nic}` : ''}</ThemedText>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: item.status === 'Active' ? '#DCFCE7' : '#FEF3C7' }]}>
                   <ThemedText style={[styles.statusText, { color: item.status === 'Active' ? '#166534' : '#92400E' }]}>
@@ -705,9 +733,9 @@ export default function ManagementScreen() {
                   <View style={[styles.viewAvatar, { backgroundColor: viewItem.color || theme.primary }]}>
                     {viewItem.image
                       ? <Image source={{ uri: viewItem.image }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                      : <ThemedText style={styles.viewAvatarText}>{viewItem.name?.charAt(0)}</ThemedText>}
+                      : <ThemedText style={styles.viewAvatarText}>{(viewItem.name || viewItem.title || viewItem.registrationNumber || '?').charAt(0)}</ThemedText>}
                   </View>
-                  <ThemedText style={styles.viewName}>{viewItem.name}</ThemedText>
+                  <ThemedText style={styles.viewName}>{viewItem.name || viewItem.title || viewItem.registrationNumber}</ThemedText>
                   <View style={[styles.statusBadge, { backgroundColor: viewItem.status === 'Active' ? '#DCFCE7' : '#FEF3C7', alignSelf:'center' }]}>
                     <ThemedText style={[styles.statusText, { color: viewItem.status === 'Active' ? '#166534' : '#92400E' }]}>
                       {viewItem.status}
@@ -717,10 +745,10 @@ export default function ManagementScreen() {
 
                 <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
                   <DetailRow label="ID Code"  value={viewItem.idCode} />
-                  {config.fields.filter(f => f.key !== 'name').map(f => (
+                  {config.fields.filter(f => f.key !== 'name' && f.key !== 'title' && f.key !== 'registrationNumber').map(f => (
                     <DetailRow key={f.key} label={f.label} value={viewItem[f.key]} />
                   ))}
-                  <DetailRow label="Progress" value={`${viewItem.progress} / ${viewItem.totalLessons} lessons`} />
+                  <DetailRow label="Progress" value={`${viewItem.progress || 0} / ${viewItem.totalLessons || 0} lessons`} />
                 </ScrollView>
 
                 <TouchableOpacity style={[styles.submitButton, { backgroundColor: theme.primary }]} onPress={() => { setShowView(false); openEdit(viewItem); }}>

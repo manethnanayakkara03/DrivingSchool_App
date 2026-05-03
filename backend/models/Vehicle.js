@@ -1,18 +1,18 @@
 const mongoose = require('mongoose');
 
 const VehicleSchema = new mongoose.Schema({
-  name:            { type: String, required: true },
-  nic:             { type: String },   // plate number stored here for list compat
-  phone:           { type: String },   // fuel type stored here
-  course:          { type: String },   // transmission stored here
-  insuranceExpiry: { type: String },
-  revenueLicense:  { type: String },
-  idCode:          { type: String },
-  progress:        { type: Number, default: 0 },
-  totalLessons:    { type: Number, default: 100 },
-  status:          { type: String, default: 'Active' },
-  color:           { type: String },
-  image:           { type: String },
+  registrationNumber: { type: String, required: true },
+  maker:              { type: String },
+  model:              { type: String },
+  year:               { type: String },
+  transmission:       { type: String },
+  fuelType:           { type: String },
+  assignedInstructor: { type: String },
+  status:             { type: String, default: 'Active' },
+  condition:          { type: String },
+  idCode:             { type: String },
+  color:              { type: String },
+  image:              { type: String },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Vehicle', VehicleSchema);
