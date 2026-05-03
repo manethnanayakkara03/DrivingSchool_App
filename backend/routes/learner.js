@@ -1,0 +1,174 @@
+const router = require('express').Router();
+const Course = require('../models/Course');
+const Enrollment = require('../models/Enrollment');
+const User = require('../models/User');
+
+// ─── courses ──────────────────────────────────────────────────────────────────
+
+// Get all available courses
+router.get('/courses', async (req, res) => {
+  try {
+    const courses = await Course.find().sort({ createdAt: 1 });
+    // Map _id to id for frontend compatibility
+    const mapped = courses.map(c => ({
+      id: c._id,
+      title: c.title,
+      description: c.description,
+      price: c.price,
+      duration: c.duration,
+      features: c.features,
+      type: c.type,
+      image: c.image,
+    }));
+    res.json(mapped);
+  } catch (err) {
+    console.error('Fetch courses error:', err);
+    res.status(500).json({ message: 'Failed to fetch courses' });
+  }
+});
+
+// Enroll in a course
+router.post('/enroll', async (req, res) => {
+  try {
+    const { learnerId, courseId } = req.body;
+    if (!learnerId || !courseId) return res.status(400).json({ message: 'IDs required' });
+
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ message: 'Course not found' });
+
+    const enrollment = await Enrollment.create({
+      learnerId,
+      courseId,
+      courseTitle: course.title,
+      price: course.price,
+      status: 'enrolled',
+      paymentStatus: 'pending',
+      progress: 0,
+    });
+
+    res.json({
+      id: enrollment._id,
+      learnerId: enrollment.learnerId,
+      courseId: enrollment.courseId,
+      courseTitle: enrollment.courseTitle,
+      price: enrollment.price,
+      status: enrollment.status,
+      paymentStatus: enrollment.paymentStatus,
+      progress: enrollment.progress,
+    });
+  } catch (err) {
+    console.error('Enrollment error:', err);
+    res.status(500).json({ message: 'Enrollment failed' });
+  }
+});
+
+// Get learner's enrollments
+router.get('/my-courses/:learnerId', async (req, res) => {
+  try {
+    const enrollments = await Enrollment.find({ learnerId: req.params.learnerId }).sort({ createdAt: -1 });
+    const mapped = enrollments.map(e => ({
+      id: e._id,
+      learnerId: e.learnerId,
+      courseId: e.courseId,
+      courseTitle: e.courseTitle,
+      price: e.price,
+      status: e.status,
+      paymentStatus: e.paymentStatus,
+      progress: e.progress,
+    }));
+    res.json(mapped);
+  } catch (err) {
+    console.error('Fetch my courses error:', err);
+    res.status(500).json({ message: 'Failed to fetch enrollments' });
+  }
+});
+
+// ─── payments ─────────────────────────────────────────────────────────────────
+
+// Pay for a course
+router.post('/pay', async (req, res) => {
+  try {
+    const { enrollmentId, amount, method } = req.body;
+
+    const enrollment = await Enrollment.findByIdAndUpdate(
+      enrollmentId,
+      { paymentStatus: 'paid' },
+      { new: true }
+    );
+    if (!enrollment) return res.status(404).json({ message: 'Enrollment not found' });
+
+    // We store learner payments as simple objects in an embedded approach
+    // For now, we return a virtual payment object
+    const payment = {
+      id: enrollment._id,
+      learnerId: enrollment.learnerId,
+      enrollmentId: enrollment._id,
+      courseTitle: enrollment.courseTitle,
+      amount,
+      method,
+      status: 'completed',
+      createdAt: new Date().toISOString(),
+    };
+
+    res.json({ success: true, payment });
+  } catch (err) {
+    console.error('Payment error:', err);
+    res.status(500).json({ message: 'Payment failed' });
+  }
+});
+
+// Get learner's payment history
+router.get('/my-payments/:learnerId', async (req, res) => {
+  try {
+    // Payments are derived from paid enrollments
+    const paidEnrollments = await Enrollment.find({
+      learnerId: req.params.learnerId,
+      paymentStatus: 'paid',
+    }).sort({ updatedAt: -1 });
+
+    const payments = paidEnrollments.map(e => ({
+      id: e._id,
+      learnerId: e.learnerId,
+      courseTitle: e.courseTitle,
+      amount: e.price,
+      status: 'completed',
+      createdAt: e.updatedAt || e.createdAt,
+    }));
+
+    res.json(payments);
+  } catch (err) {
+    console.error('Fetch payments error:', err);
+    res.status(500).json({ message: 'Failed to fetch payments' });
+  }
+});
+
+// ─── profile ──────────────────────────────────────────────────────────────────
+
+// Update profile
+router.put('/profile/:id', async (req, res) => {
+  try {
+    const { name, nic, phone, address } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { name, nic, phone, address },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json({
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      nic: user.nic,
+      phone: user.phone,
+      address: user.address,
+    });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+module.exports = router;

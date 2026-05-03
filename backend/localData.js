@@ -19,6 +19,39 @@ function initializeData() {
       bookings: [],
       payments: [],
       maintenance: [],
+      courses: [
+        {
+          id: 'c1',
+          title: 'Basic Manual Driving',
+          description: 'Master the fundamentals of manual transmission driving.',
+          price: 25000,
+          duration: '1 Month',
+          features: ['15 Practical Sessions', 'Theory Handbook', 'Mock Test'],
+          type: 'manual',
+          image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=400'
+        },
+        {
+          id: 'c2',
+          title: 'Premium Automatic Course',
+          description: 'Effortless driving with automatic transmission mastery.',
+          price: 30000,
+          duration: '1 Month',
+          features: ['20 Practical Sessions', 'Luxury Vehicle', 'Home Pickup'],
+          type: 'auto',
+          image: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=400'
+        },
+        {
+          id: 'c3',
+          title: 'Professional License Pack',
+          description: 'Comprehensive training for commercial vehicle licenses.',
+          price: 45000,
+          duration: '2 Months',
+          features: ['Extended Practice', 'Night Driving', 'Highway Prep'],
+          type: 'both',
+          image: 'https://images.unsplash.com/photo-1517524206127-48bbd363f3d7?q=80&w=400'
+        }
+      ],
+      enrollments: [],
     };
     fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
     console.log('✅ Local data storage initialized');
@@ -37,6 +70,8 @@ function readData() {
       bookings: [],
       payments: [],
       maintenance: [],
+      courses: [],
+      enrollments: [],
     };
   }
 }

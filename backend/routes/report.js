@@ -1,6 +1,5 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
-const localData = require('../localData');
 const Learner = require('../models/Learner');
 const Instructor = require('../models/Instructor');
 const Vehicle = require('../models/Vehicle');
@@ -14,7 +13,6 @@ const authWithQuery = (req, res, next) => {
   if (!token) {
     return res.status(401).json({ message: 'No token provided' });
   }
-  // Create a fake req.user for compatibility
   req.user = { email: 'Admin' };
   next();
 };
@@ -22,135 +20,43 @@ const authWithQuery = (req, res, next) => {
 // GET /api/report/generate
 router.get('/generate', auth, async (req, res) => {
   try {
-    let reportData = {
+    const [learners, instructors, vehicles, bookings, payments, maintenance] = await Promise.all([
+      Learner.find(), Instructor.find(), Vehicle.find(),
+      Booking.find(), Payment.find(), Maintenance.find(),
+    ]);
+
+    const totalRevenue = payments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
+
+    const reportData = {
       generatedDate: new Date().toISOString(),
       generatedBy: req.user?.email || 'Admin',
-      stats: {},
-      summary: {},
-      details: {},
-    };
-
-    // Try MongoDB first, fallback to local storage
-    try {
-      const [learners, instructors, vehicles, bookings, payments, maintenance] = await Promise.all([
-        Learner.find(),
-        Instructor.find(),
-        Vehicle.find(),
-        Booking.find(),
-        Payment.find(),
-        Maintenance.find(),
-      ]);
-
-      // Calculate totals
-      const totalRevenue = payments.reduce((sum, p) => {
-        const amt = parseFloat(p.phone) || 0;
-        return sum + amt;
-      }, 0);
-
-      reportData.stats = {
+      stats: {
         totalLearners: learners.length,
         totalInstructors: instructors.length,
         totalVehicles: vehicles.length,
         totalBookings: bookings.length,
-        totalRevenue: totalRevenue,
+        totalRevenue,
         maintenanceRecords: maintenance.length,
-      };
-
-      reportData.details = {
-        learners: learners.map(l => ({
-          id: l._id,
-          name: l.name,
-          nic: l.nic,
-          phone: l.phone,
-          email: l.email,
-          course: l.course,
-          licenseCategory: l.licenseCategory,
-        })),
-        instructors: instructors.map(i => ({
-          id: i._id,
-          name: i.name,
-          nic: i.nic,
-          phone: i.phone,
-          email: i.email,
-          experience: i.experience,
-          specialty: i.specialty,
-        })),
-        vehicles: vehicles.map(v => ({
-          id: v._id,
-          name: v.name,
-          nic: v.nic,
-          fuelType: v.phone,
-          transmission: v.course,
-          insuranceExpiry: v.insuranceExpiry,
-          revenueLicense: v.revenueLicense,
-        })),
-        bookings: bookings.map(b => ({
-          id: b._id,
-          studentName: b.studentName,
-          studentPhone: b.studentPhone,
-          instructorId: b.instructorId,
-          vehicleId: b.vehicleId,
-          date: b.date,
-          startTime: b.startTime,
-          endTime: b.endTime,
-          notes: b.notes,
-        })),
-        payments: payments.map(p => ({
-          id: p._id,
-          studentName: p.studentName,
-          course: p.course,
-          totalFee: p.totalFee,
-          amountPaid: parseFloat(p.phone) || 0,
-          method: p.course,
-          date: p.date,
-          status: p.status,
-        })),
-        maintenance: maintenance.map(m => ({
-          id: m._id,
-          vehicleId: m.vehicleId,
-          serviceDate: m.serviceDate,
-          serviceType: m.serviceType,
-          nextServiceDate: m.nextServiceDate,
-          description: m.description,
-          cost: m.cost,
-          maintainerName: m.maintainerName,
-        })),
-      };
-
-      // Calculate summary insights
-      const activeBookings = bookings.filter(b => {
-        const bookingDate = new Date(b.date);
-        return bookingDate >= new Date();
-      }).length;
-
-      const activeLearners = learners.length;
-      const uniqueInstructors = instructors.length;
-
-      reportData.summary = {
-        activeBookings,
-        activeLearners,
-        instructorsOnStaff: uniqueInstructors,
+      },
+      details: {
+        learners: learners.map(l => ({ id: l._id, name: l.name, nic: l.nic, phone: l.phone, email: l.email, course: l.course, licenseCategory: l.licenseCategory })),
+        instructors: instructors.map(i => ({ id: i._id, name: i.name, nic: i.nic, phone: i.phone, email: i.email, experience: i.experience, specialty: i.specialty })),
+        vehicles: vehicles.map(v => ({ id: v._id, name: v.name, nic: v.nic, fuelType: v.phone, transmission: v.course, insuranceExpiry: v.insuranceExpiry, revenueLicense: v.revenueLicense })),
+        bookings: bookings.map(b => ({ id: b._id, studentName: b.studentName, studentPhone: b.studentPhone, instructorId: b.instructorId, vehicleId: b.vehicleId, date: b.date, startTime: b.startTime, endTime: b.endTime, notes: b.notes })),
+        payments: payments.map(p => ({ id: p._id, studentName: p.studentName, course: p.course, totalFee: p.totalFee, amountPaid: parseFloat(p.amountPaid) || 0, method: p.method, date: p.date, status: p.status })),
+        maintenance: maintenance.map(m => ({ id: m._id, vehicleId: m.vehicleId, serviceDate: m.serviceDate, serviceType: m.serviceType, nextServiceDate: m.nextServiceDate, description: m.description, cost: m.cost, maintainerName: m.maintainerName })),
+      },
+      summary: {
+        activeBookings: bookings.filter(b => new Date(b.date) >= new Date()).length,
+        activeLearners: learners.length,
+        instructorsOnStaff: instructors.length,
         averageRevenuePerBooking: bookings.length > 0 ? (totalRevenue / bookings.length).toFixed(2) : 0,
-        vehicleUtilizationRate: ((bookings.length / (vehicles.length * 30)) * 100).toFixed(2) + '%',
+        vehicleUtilizationRate: vehicles.length > 0 ? ((bookings.length / (vehicles.length * 30)) * 100).toFixed(2) + '%' : '0%',
         maintenanceBacklog: maintenance.filter(m => !m.serviceDate).length,
-      };
+      },
+    };
 
-      res.json(reportData);
-    } catch (dbErr) {
-      // Fallback to local storage
-      const stats = localData.getStats();
-      
-      reportData.stats = stats;
-      reportData.summary = {
-        activeBookings: stats.bookings,
-        activeLearners: stats.learners,
-        instructorsOnStaff: stats.instructors,
-        vehicleFleet: stats.vehicles,
-        monthlyRevenue: stats.revenue,
-      };
-
-      res.json(reportData);
-    }
+    res.json(reportData);
   } catch (err) {
     console.error('Report Generation Error:', err);
     res.status(500).json({ message: 'Failed to generate report', error: err.message });
@@ -160,58 +66,31 @@ router.get('/generate', auth, async (req, res) => {
 // GET /api/report/download (returns HTML for viewing/printing)
 router.get('/download', authWithQuery, async (req, res) => {
   try {
-    let reportData = {
-      generatedDate: new Date().toISOString(),
-      generatedBy: req.user?.email || 'Admin',
-      stats: {},
-      summary: {},
+    const [learners, instructors, vehicles, bookings, payments, maintenance] = await Promise.all([
+      Learner.find(), Instructor.find(), Vehicle.find(),
+      Booking.find(), Payment.find(), Maintenance.find(),
+    ]);
+
+    const totalRevenue = payments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
+    const generatedDate = new Date().toISOString();
+
+    const stats = {
+      totalLearners: learners.length,
+      totalInstructors: instructors.length,
+      totalVehicles: vehicles.length,
+      totalBookings: bookings.length,
+      totalRevenue,
+      maintenanceRecords: maintenance.length,
     };
 
-    // Try MongoDB first, fallback to local storage
-    try {
-      const [learners, instructors, vehicles, bookings, payments, maintenance] = await Promise.all([
-        Learner.find(),
-        Instructor.find(),
-        Vehicle.find(),
-        Booking.find(),
-        Payment.find(),
-        Maintenance.find(),
-      ]);
+    const summary = {
+      activeBookings: bookings.filter(b => new Date(b.date) >= new Date()).length,
+      activeLearners: learners.length,
+      instructorsOnStaff: instructors.length,
+      vehicleFleet: vehicles.length,
+    };
 
-      const totalRevenue = payments.reduce((sum, p) => {
-        const amt = parseFloat(p.phone) || 0;
-        return sum + amt;
-      }, 0);
-
-      reportData.stats = {
-        totalLearners: learners.length,
-        totalInstructors: instructors.length,
-        totalVehicles: vehicles.length,
-        totalBookings: bookings.length,
-        totalRevenue: totalRevenue,
-        maintenanceRecords: maintenance.length,
-      };
-
-      reportData.summary = {
-        activeBookings: bookings.filter(b => new Date(b.date) >= new Date()).length,
-        activeLearners: learners.length,
-        instructorsOnStaff: instructors.length,
-        vehicleFleet: vehicles.length,
-      };
-    } catch (dbErr) {
-      const stats = localData.getStats();
-      reportData.stats = stats;
-      reportData.summary = {
-        activeBookings: stats.bookings,
-        activeLearners: stats.learners,
-        instructorsOnStaff: stats.instructors,
-        vehicleFleet: stats.vehicles,
-      };
-    }
-
-    // Generate HTML report
-    const html = `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -240,73 +119,36 @@ router.get('/download', authWithQuery, async (req, res) => {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚗 Arampath Driving School</h1>
+      <h1>Arampath Driving School</h1>
       <p>Monthly Management Report</p>
       <div class="report-info">
-        <p>Generated: ${new Date(reportData.generatedDate).toLocaleDateString()} at ${new Date(reportData.generatedDate).toLocaleTimeString()}</p>
-        <p>By: ${reportData.generatedBy}</p>
+        <p>Generated: ${new Date(generatedDate).toLocaleDateString()} at ${new Date(generatedDate).toLocaleTimeString()}</p>
+        <p>By: ${req.user?.email || 'Admin'}</p>
       </div>
     </div>
-
     <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total Students</div>
-        <div class="stat-value">${reportData.stats.totalLearners || 0}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Instructors</div>
-        <div class="stat-value">${reportData.stats.totalInstructors || 0}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Active Vehicles</div>
-        <div class="stat-value">${reportData.stats.totalVehicles || 0}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Bookings</div>
-        <div class="stat-value">${reportData.stats.totalBookings || 0}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Monthly Revenue (LKR)</div>
-        <div class="stat-value">${(reportData.stats.totalRevenue || 0).toLocaleString()}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Maintenance Records</div>
-        <div class="stat-value">${reportData.stats.maintenanceRecords || 0}</div>
-      </div>
+      <div class="stat-card"><div class="stat-label">Total Students</div><div class="stat-value">${stats.totalLearners || 0}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Instructors</div><div class="stat-value">${stats.totalInstructors || 0}</div></div>
+      <div class="stat-card"><div class="stat-label">Active Vehicles</div><div class="stat-value">${stats.totalVehicles || 0}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value">${stats.totalBookings || 0}</div></div>
+      <div class="stat-card"><div class="stat-label">Monthly Revenue (LKR)</div><div class="stat-value">${(stats.totalRevenue || 0).toLocaleString()}</div></div>
+      <div class="stat-card"><div class="stat-label">Maintenance Records</div><div class="stat-value">${stats.maintenanceRecords || 0}</div></div>
     </div>
-
     <div class="summary-section">
       <h2>Summary Overview</h2>
-      <div class="summary-item">
-        <span class="summary-label">Active Bookings:</span>
-        <span class="summary-value">${reportData.summary.activeBookings || 0}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Active Learners:</span>
-        <span class="summary-value">${reportData.summary.activeLearners || 0}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Instructors on Staff:</span>
-        <span class="summary-value">${reportData.summary.instructorsOnStaff || 0}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Vehicle Fleet:</span>
-        <span class="summary-value">${reportData.summary.vehicleFleet || 0}</span>
-      </div>
+      <div class="summary-item"><span class="summary-label">Active Bookings:</span><span class="summary-value">${summary.activeBookings || 0}</span></div>
+      <div class="summary-item"><span class="summary-label">Active Learners:</span><span class="summary-value">${summary.activeLearners || 0}</span></div>
+      <div class="summary-item"><span class="summary-label">Instructors on Staff:</span><span class="summary-value">${summary.instructorsOnStaff || 0}</span></div>
+      <div class="summary-item"><span class="summary-label">Vehicle Fleet:</span><span class="summary-value">${summary.vehicleFleet || 0}</span></div>
     </div>
-
     <div class="footer">
       <p>This is an automated report generated by Arampath Driving School Management System</p>
       <p>For any inquiries, contact the administration office</p>
     </div>
   </div>
-  
-  <script>
-    window.print();
-  </script>
+  <script>window.print();</script>
 </body>
-</html>
-    `;
+</html>`;
 
     res.setHeader('Content-Type', 'text/html');
     res.send(html);

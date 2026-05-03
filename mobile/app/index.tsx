@@ -8,9 +8,10 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { authApi, setToken } from '@/services/api';
+import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { authApi, setToken, setUser } from '@/services/api';
 
-export default function AdminLogin() {
+export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   
@@ -26,7 +27,15 @@ export default function AdminLogin() {
     try {
       const res = await authApi.login(email.trim(), password);
       setToken(res.token);
-      router.replace('/(tabs)/dashboard');
+      setUser(res.user);
+      
+      if (res.user.role === 'admin') {
+        router.replace('/(tabs)/dashboard');
+      } else if (res.user.role === 'instructor') {
+        router.replace('/(instructor)/home');
+      } else {
+        router.replace('/(learner)/home');
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       const errorMsg = err.message || 'Login failed. Please try again.';
@@ -40,13 +49,20 @@ export default function AdminLogin() {
     }
   };
 
+  const buttonScale = useSharedValue(1);
+  const animatedButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
+
+  const onPressIn = () => { buttonScale.value = withTiming(0.95, { duration: 100 }); };
+  const onPressOut = () => { buttonScale.value = withTiming(1, { duration: 100 }); };
 
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       
       <LinearGradient
-        colors={[theme.primary + '10', 'transparent']}
+        colors={[theme.primary + '20', theme.background, theme.background]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -54,37 +70,31 @@ export default function AdminLogin() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Back Button */}
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={20} color={theme.text} />
-            <ThemedText style={styles.backText}>Back to Home</ThemedText>
-          </TouchableOpacity>
-
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Logo Section */}
-          <View style={styles.logoSection}>
+          <Animated.View entering={FadeInDown.duration(800).delay(200)} style={styles.logoSection}>
             <LinearGradient
-              colors={['#4F46E5', '#7C3AED']}
+              colors={[theme.primary, theme.secondary]}
               style={styles.logoGradient}
             >
-              <Ionicons name="shield-checkmark" size={40} color="#fff" />
+              <Ionicons name="car-sport" size={40} color="#fff" />
             </LinearGradient>
             
-            <ThemedText style={styles.title}>Admin Login</ThemedText>
-            <ThemedText style={styles.subtitle}>Sign in to manage your driving school</ThemedText>
-          </View>
+            <ThemedText style={styles.title}>DriveEase</ThemedText>
+            <ThemedText style={styles.subtitle}>Your journey to mastery starts here</ThemedText>
+          </Animated.View>
 
-          {/* Form Section */}
-          <View style={styles.formSection}>
+          <Animated.View entering={FadeInUp.duration(800).delay(400)} style={styles.formSection}>
             <ThemedText style={styles.label}>Email Address</ThemedText>
-            <GlassView style={styles.inputContainer} intensity={20}>
+            <GlassView 
+              style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
+              intensity={Platform.OS === 'ios' ? 20 : 0}
+              contentStyle={styles.inputGlassContent}
+            >
               <Ionicons name="mail-outline" size={20} color={theme.icon} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { color: theme.text }]}
-                placeholder="admin@example.com"
+                placeholder="email@example.com"
                 placeholderTextColor={theme.icon}
                 value={email}
                 onChangeText={setEmail}
@@ -94,7 +104,11 @@ export default function AdminLogin() {
             </GlassView>
 
             <ThemedText style={[styles.label, { marginTop: 20 }]}>Password</ThemedText>
-            <GlassView style={styles.inputContainer} intensity={20}>
+            <GlassView 
+              style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
+              intensity={Platform.OS === 'ios' ? 20 : 0}
+              contentStyle={styles.inputGlassContent}
+            >
               <Ionicons name="lock-closed-outline" size={20} color={theme.icon} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { color: theme.text }]}
@@ -109,18 +123,30 @@ export default function AdminLogin() {
             {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
 
             <TouchableOpacity 
-              style={[styles.loginButton, { backgroundColor: loading ? theme.primary + '99' : theme.primary }]}
               onPress={handleLogin}
+              onPressIn={onPressIn}
+              onPressOut={onPressOut}
               disabled={loading}
+              activeOpacity={0.8}
+              style={{ width: '100%' }}
             >
-              {loading
-                ? <ActivityIndicator color="#fff" />
-                : <>
-                    <ThemedText style={styles.loginButtonText}>Log In</ThemedText>
-                    <Ionicons name="log-in-outline" size={20} color="#fff" style={{ marginLeft: 8 }} />
-                  </>}
+              <Animated.View style={[styles.loginButton, { backgroundColor: loading ? theme.primary + '99' : theme.primary }, animatedButtonStyle]}>
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <>
+                      <ThemedText style={styles.loginButtonText}>Sign In</ThemedText>
+                      <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
+                    </>}
+              </Animated.View>
             </TouchableOpacity>
-          </View>
+
+            <View style={styles.footer}>
+              <ThemedText style={styles.footerText}>Don't have an account? </ThemedText>
+              <TouchableOpacity onPress={() => router.push('/register')}>
+                <ThemedText style={[styles.footerLink, { color: theme.primary }]}>Register Now</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </ThemedView>
@@ -133,47 +159,41 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
     paddingBottom: 40,
     alignItems: 'center',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 40,
-    gap: 8,
-  },
-  backText: {
-    fontSize: 16,
-    opacity: 0.7,
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 50,
   },
   logoGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+    width: 90,
+    height: 90,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 8,
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800',
-    marginBottom: 8,
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    lineHeight: 52,
   },
   subtitle: {
     fontSize: 16,
     opacity: 0.6,
     textAlign: 'center',
+    marginTop: 8,
   },
   formSection: {
     width: '100%',
@@ -181,17 +201,26 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 10,
     marginLeft: 4,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 60,
+    borderRadius: 18,
+    marginBottom: 4,
+  },
+  inputGlassContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 0,
     paddingHorizontal: 16,
-    height: 56,
+    flex: 1,
+    height: '100%',
+    borderWidth: 1.5,
   },
   inputIcon: {
     marginRight: 12,
@@ -200,12 +229,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     fontSize: 16,
-    paddingVertical: 12,
   },
   loginButton: {
     flexDirection: 'row',
-    height: 56,
-    borderRadius: 16,
+    height: 60,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 32,
@@ -226,5 +254,18 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
     fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 30,
+  },
+  footerText: {
+    fontSize: 15,
+    opacity: 0.6,
+  },
+  footerLink: {
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

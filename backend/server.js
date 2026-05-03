@@ -11,10 +11,6 @@ dns.setDefaultResultOrder('ipv4first');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Initialize local data storage
-const localData = require('./localData');
-localData.initializeData();
-
 // Create a custom DNS resolver for MongoDB driver (bypasses broken OS DNS)
 const resolver = new dns.promises.Resolver();
 resolver.setServers(['1.1.1.1', '8.8.8.8']); // Cloudflare & Google DNS
@@ -48,12 +44,11 @@ const customLookup = async (hostname, options, callback) => {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// MongoDB Connection (Optional - Local storage is primary)
-let mongoConnected = false;
+// MongoDB Connection (Required)
 const connectMongo = async () => {
   if (!process.env.MONGODB_URI) {
-    console.log('📁 Using Local File-Based Storage (MongoDB not configured)');
-    return;
+    console.error('❌ MONGODB_URI is not set in .env — cannot start server');
+    process.exit(1);
   }
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -64,15 +59,18 @@ const connectMongo = async () => {
       retryWrites: true,
       w: 'majority'
     });
-    mongoConnected = true;
     console.log('✅ MongoDB Connected Successfully');
+    console.log('   Database: arampath_driving_school');
+
+    // Seed default data if the database is empty
+    const seedDatabase = require('./seedDB');
+    await seedDatabase();
   } catch (err) {
-    console.log('⚠️  MongoDB Connection Failed');
-    console.log('   Error:', err.codeName || err.code || err.message);
-    console.log('   Using Local File-Based Storage as fallback');
+    console.error('❌ MongoDB Connection Failed');
+    console.error('   Error:', err.codeName || err.code || err.message);
+    process.exit(1);
   }
 };
-connectMongo();
 
 // Routes
 const crudRouter = require('./routes/crudRouter');
@@ -84,8 +82,10 @@ const Payment     = require('./models/Payment');
 const Maintenance = require('./models/Maintenance');
 
 app.use('/api/auth',        require('./routes/auth'));
+app.use('/api/learner',     require('./routes/learner'));
 app.use('/api/dashboard',   require('./routes/dashboard'));
 app.use('/api/report',      require('./routes/report'));
+app.use('/api/instructor',  require('./routes/instructor'));
 app.use('/api/learners',    crudRouter(Learner,     'DS'));
 app.use('/api/instructors', crudRouter(Instructor,  'INS'));
 app.use('/api/vehicles',    crudRouter(Vehicle,     'VH'));
@@ -96,4 +96,7 @@ app.use('/api/maintenance', crudRouter(Maintenance, 'MT'));
 // Health check
 app.get('/', (req, res) => res.send('Arampath Driving School API is running ✅'));
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Start server only after MongoDB is connected
+connectMongo().then(() => {
+  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+});

@@ -8,6 +8,7 @@ interface GlassViewProps extends ViewProps {
   intensity?: number;
   borderRadius?: number;
   style?: ViewStyle;
+  contentStyle?: ViewStyle;
 }
 
 export const GlassView: React.FC<GlassViewProps> = ({ 
@@ -15,6 +16,7 @@ export const GlassView: React.FC<GlassViewProps> = ({
   intensity = 50, 
   borderRadius = 20,
   style,
+  contentStyle,
   ...props 
 }) => {
   const colorScheme = useColorScheme() ?? 'light';
@@ -28,7 +30,7 @@ export const GlassView: React.FC<GlassViewProps> = ({
         style={[StyleSheet.absoluteFill, { borderRadius }]} 
         pointerEvents="none"
       />
-      <View style={[styles.content, { borderColor: theme.glassBorder, borderRadius, zIndex: 1 }]}>
+      <View style={[styles.content, { borderColor: theme.glassBorder, borderRadius, zIndex: 1 }, contentStyle]}>
         {children}
       </View>
     </View>

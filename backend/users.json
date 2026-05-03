@@ -6,6 +6,50 @@
       "password": "$2b$10$T2V4iE8cPHRVkInuVLAThOI4Bhg7T3dLzBXndXKrxara5aunkqoB2",
       "name": "Admin",
       "createdAt": "2026-05-02T16:32:33.525Z"
+    },
+    {
+      "id": "user-1777823137470",
+      "email": "nana@gmail.com",
+      "password": "$2b$10$hPvvg1Iu2MxPcY.Fg45G7OpcWw538UdmBJaet1KDbWvTKmNgRxoiW",
+      "name": "Maneth nana",
+      "nic": "200328400979",
+      "phone": "0756668899",
+      "address": "malabe kaduwela",
+      "role": "learner",
+      "createdAt": "2026-05-03T15:45:37.597Z"
+    },
+    {
+      "id": "user-1777823699965",
+      "email": "pasidu@gmail.com",
+      "password": "$2b$10$HqrSq.yvHWPOyYahB5wsS.Sv6oopS0hcYj696EI68j9XQZi0seKSK",
+      "name": "Pasidu Achintha",
+      "nic": "200328400979",
+      "phone": "0745566333",
+      "address": "Dnsjsnsnsns",
+      "role": "learner",
+      "createdAt": "2026-05-03T15:55:00.096Z"
+    },
+    {
+      "id": "user-1777823792996",
+      "email": "pasi@gmail.com",
+      "password": "$2b$10$Vdmnw3DQVPx5qA9QgLMvlOYVs28bF1UygzQ4PuUb1VaZ6H6nn/HLq",
+      "name": "Pasidu Achintha",
+      "nic": "200328400979",
+      "phone": "0745566333",
+      "address": "Dnsjsnsnsns",
+      "role": "learner",
+      "createdAt": "2026-05-03T15:56:33.115Z"
+    },
+    {
+      "id": "user-1777823881052",
+      "email": "pasin@gmail.com",
+      "password": "$2b$10$5ojqtluQWSwpwxLy8Pu75uGY4dcc0g4mfcR16jcah0gZ7LPUP1X/K",
+      "name": "Pasidu Achintha",
+      "nic": "200328400979",
+      "phone": "0745566333",
+      "address": "Dnsjsnsnsns",
+      "role": "learner",
+      "createdAt": "2026-05-03T15:58:01.173Z"
     }
   ]
 }

@@ -8,6 +8,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, withSequence, useAnimatedStyle, useSharedValue, withDelay, interpolateColor } from 'react-native-reanimated';
 import { dashboardApi, reportApi, clearToken, BASE_URL, getToken } from '@/services/api';
 
 const { width } = Dimensions.get('window');
@@ -83,10 +84,10 @@ export default function AdminDashboard() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <Animated.View entering={FadeInDown.duration(600).delay(100)}>
           <ThemedText style={styles.brandText}>DriveEase</ThemedText>
-        </View>
-        <View style={styles.headerIcons}>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.duration(600).delay(200)} style={styles.headerIcons}>
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="search-outline" size={20} color={theme.text} />
           </TouchableOpacity>
@@ -99,12 +100,12 @@ export default function AdminDashboard() {
               <ThemedText style={styles.avatarText}>A</ThemedText>
             </View>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Welcome Section */}
-        <View style={styles.welcomeRow}>
+        <Animated.View entering={FadeInDown.duration(800).delay(300)} style={styles.welcomeRow}>
           <View style={styles.welcomeTextContainer}>
             <View style={styles.welcomeHeader}>
               <View style={[styles.welcomeAvatar, { backgroundColor: theme.primary }]}>
@@ -121,10 +122,10 @@ export default function AdminDashboard() {
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtonsRow}>
+        <Animated.View entering={FadeInDown.duration(800).delay(500)} style={styles.actionButtonsRow}>
           <TouchableOpacity 
             style={[styles.generateReportBtn, { backgroundColor: theme.primary, opacity: reportLoading ? 0.6 : 1 }]}
             onPress={handleGenerateReport}
@@ -146,7 +147,7 @@ export default function AdminDashboard() {
             <Ionicons name="log-out-outline" size={18} color="#EF4444" />
             <ThemedText style={[styles.btnText, { color: '#EF4444' }]}>Sign Out</ThemedText>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Stats Grid */}
         {loading ? (
@@ -160,6 +161,7 @@ export default function AdminDashboard() {
             color="#3B82F6" 
             theme={theme}
             onPress={() => router.push('/manage/learners')}
+            index={0}
           />
           <AdminStatCard 
             label="Instructors" 
@@ -168,6 +170,7 @@ export default function AdminDashboard() {
             color="#10B981" 
             theme={theme}
             onPress={() => router.push('/manage/instructors')}
+            index={1}
           />
           <AdminStatCard 
             label="Active Vehicles" 
@@ -176,6 +179,7 @@ export default function AdminDashboard() {
             color="#F59E0B" 
             theme={theme}
             onPress={() => router.push('/manage/vehicles')}
+            index={2}
           />
           <AdminStatCard 
             label="Monthly Revenue" 
@@ -184,6 +188,7 @@ export default function AdminDashboard() {
             color="#8B5CF6" 
             theme={theme}
             onPress={() => router.push('/manage/payments')}
+            index={3}
           />
           <AdminStatCard 
             label="Bookings" 
@@ -192,6 +197,7 @@ export default function AdminDashboard() {
             color="#EF4444" 
             theme={theme}
             onPress={() => router.push('/manage/bookings')}
+            index={4}
           />
         </View>
         )}
@@ -220,7 +226,7 @@ export default function AdminDashboard() {
           <GlassView style={[styles.chartCard, { marginTop: 20 }]}>
             <ThemedText style={styles.chartTitle}>Student Status</ThemedText>
             <View style={styles.donutPlaceholder}>
-              <View style={[styles.donutCircle, { borderColor: '#10B981', borderTopColor: '#F59E0B' }]} />
+              <AnimatedDonut theme={theme} />
               <View style={styles.donutInfo}>
                 <ThemedText style={styles.donutValue}>85%</ThemedText>
                 <ThemedText style={styles.donutLabel}>Active</ThemedText>
@@ -260,19 +266,44 @@ export default function AdminDashboard() {
   );
 }
 
-function AdminStatCard({ label, value, icon, color, theme, onPress }: any) {
+function AdminStatCard({ label, value, icon, color, theme, onPress, index }: any) {
   return (
-    <TouchableOpacity onPress={onPress}>
-      <GlassView style={styles.statCard} intensity={20}>
-        <View style={[styles.statIconContainer, { backgroundColor: color + '15' }]}>
-          <Ionicons name={icon} size={20} color={color} />
-        </View>
-        <View>
-          <ThemedText style={styles.statValue}>{value}</ThemedText>
-          <ThemedText style={styles.statLabel}>{label}</ThemedText>
-        </View>
-      </GlassView>
-    </TouchableOpacity>
+    <Animated.View entering={FadeInUp.duration(600).delay(700 + (index * 100))}>
+      <TouchableOpacity onPress={onPress}>
+        <GlassView style={styles.statCard} intensity={20}>
+          <View style={[styles.statIconContainer, { backgroundColor: color + '15' }]}>
+            <Ionicons name={icon} size={20} color={color} />
+          </View>
+          <View>
+            <ThemedText style={styles.statValue}>{value}</ThemedText>
+            <ThemedText style={styles.statLabel}>{label}</ThemedText>
+          </View>
+        </GlassView>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function AnimatedDonut({ theme }: any) {
+  const scale = useSharedValue(1);
+
+  React.useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.05, { duration: 1500 }),
+        withTiming(1, { duration: 1500 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[styles.donutCircle, { borderColor: '#10B981', borderTopColor: '#F59E0B' }, animatedStyle]} />
   );
 }
 

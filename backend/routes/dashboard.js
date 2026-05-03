@@ -1,6 +1,5 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
-const localData = require('../localData');
 const Learner = require('../models/Learner');
 const Instructor = require('../models/Instructor');
 const Vehicle = require('../models/Vehicle');
@@ -10,29 +9,22 @@ const Payment = require('../models/Payment');
 // GET /api/dashboard/stats
 router.get('/stats', auth, async (req, res) => {
   try {
-    // Try MongoDB first
-    try {
-      const [learners, instructors, vehicles, bookings, payments] = await Promise.all([
-        Learner.countDocuments(),
-        Instructor.countDocuments(),
-        Vehicle.countDocuments(),
-        Booking.countDocuments(),
-        Payment.find(),
-      ]);
+    const [learners, instructors, vehicles, bookings, payments] = await Promise.all([
+      Learner.countDocuments(),
+      Instructor.countDocuments(),
+      Vehicle.countDocuments(),
+      Booking.countDocuments(),
+      Payment.find(),
+    ]);
 
-      // sum amounts stored in the `phone` field of Payment
-      const revenue = payments.reduce((sum, p) => {
-        const amt = parseFloat(p.phone) || 0;
-        return sum + amt;
-      }, 0);
+    const revenue = payments.reduce((sum, p) => {
+      const amt = parseFloat(p.amountPaid) || 0;
+      return sum + amt;
+    }, 0);
 
-      res.json({ learners, instructors, vehicles, bookings, revenue });
-    } catch (dbErr) {
-      // Fallback to local storage
-      const stats = localData.getStats();
-      res.json(stats);
-    }
+    res.json({ learners, instructors, vehicles, bookings, revenue });
   } catch (err) {
+    console.error('Dashboard stats error:', err.message);
     res.status(500).json({ message: err.message });
   }
 });

@@ -45,7 +45,7 @@ function validatePassword(plainPassword, hashedPassword) {
   return bcrypt.compareSync(plainPassword, hashedPassword);
 }
 
-function createUser(email, password, name = 'User') {
+function createUser(email, password, name = 'User', extra = {}) {
   const users = getUsers();
   if (users.find(u => u.email === email)) {
     throw new Error('Email already exists');
@@ -55,11 +55,12 @@ function createUser(email, password, name = 'User') {
     email,
     password: bcrypt.hashSync(password, 10),
     name,
+    ...extra,
     createdAt: new Date().toISOString()
   };
   users.push(newUser);
   saveUsers(users);
-  return { id: newUser.id, email: newUser.email, name: newUser.name };
+  return { id: newUser.id, email: newUser.email, name: newUser.name, ...extra };
 }
 
 module.exports = {
