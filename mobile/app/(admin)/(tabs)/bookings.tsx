@@ -4,6 +4,7 @@ import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableO
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SectionHeader } from '@/components/admin/SectionHeader';
 import { GlassCard } from '@/components/admin/GlassCard';
 import { StatusBadge } from '@/components/admin/StatusBadge';
@@ -12,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { bookingsApi, adminApi } from '@/services/api';
+import { BookingForm } from '@/components/admin/forms/BookingForm';
 
 
 export default function BookingsPage() {
@@ -26,16 +28,27 @@ export default function BookingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('All'); // All, Pending, Confirmed, Cancelled, Unscheduled, Learners
 
+  // Form State
+  const [formVisible, setFormVisible] = useState(false);
+  const [editingBooking, setEditingBooking] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
+
   const fetchBookings = async () => {
     try {
       setLoading(true);
       const [bookingsData, enrollmentsData] = await Promise.all([
-        bookingsApi.list(),
+        bookingsApi.list().catch(() => []),
         adminApi.getEnrolledStudents().catch(() => [])
       ]);
       
-      setBookings(bookingsData);
-      setEnrollments(enrollmentsData);
+      // Ensure all items have a consistent id field
+      const mappedBookings = (Array.isArray(bookingsData) ? bookingsData : []).map(b => ({
+        ...b,
+        id: b._id || b.id
+      }));
+
+      setBookings(mappedBookings);
+      setEnrollments(enrollmentsData || []);
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'Failed to fetch bookings');
@@ -64,6 +77,57 @@ export default function BookingsPage() {
     }
   };
 
+  const handleCreateBooking = async (data: any) => {
+    try {
+      setSubmitting(true);
+      const bookingId = editingBooking?.id || editingBooking?._id;
+      
+      if (bookingId) {
+        await bookingsApi.update(bookingId, data);
+        Alert.alert('Success', 'Booking updated successfully');
+      } else {
+        // This is a new booking (even if pre-filled from an enrollment)
+        await bookingsApi.create(data);
+        Alert.alert('Success', 'Booking created successfully');
+      }
+      setFormVisible(false);
+      setEditingBooking(null);
+      fetchBookings();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to save booking');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const deleteBooking = (id: string) => {
+    Alert.alert(
+      'Delete Booking',
+      'Are you sure you want to delete this booking?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await bookingsApi.remove(id);
+              fetchBookings();
+              Alert.alert('Deleted', 'Booking removed successfully');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete booking');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const openEditForm = (booking: any) => {
+    setEditingBooking(booking);
+    setFormVisible(true);
+  };
+
   const displayData = (() => {
     if (filter === 'Learners') {
       return enrollments.map(e => ({
@@ -79,17 +143,7 @@ export default function BookingsPage() {
     }
     
     if (filter === 'All') {
-      const enrollmentPlaceholders = enrollments.map(e => ({
-        ...e,
-        id: e._id || e.id,
-        learnerName: e.learnerName,
-        courseTitle: e.courseTitle,
-        date: 'Enrolled',
-        time: 'New Student',
-        status: 'Enrolled',
-        isEnrollment: true
-      }));
-      return [...bookings, ...enrollmentPlaceholders];
+      return bookings;
     }
 
     return bookings;
@@ -154,38 +208,67 @@ export default function BookingsPage() {
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="person-outline" size={14} color={theme.muted} />
-            <Text style={[styles.infoText, { color: theme.muted }]}>{item.instructorName || item.instructor}</Text>
+            <Text style={[styles.infoText, { color: theme.muted }]}>{item.instructorName || item.instructor || 'Not Assigned'}</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="car-outline" size={14} color={theme.muted} />
-            <Text style={[styles.infoText, { color: theme.muted }]}>{item.vehicleName || item.vehicle}</Text>
-          </View>
+          {item.examType && (
+            <View style={styles.infoRow}>
+              <Ionicons name="ribbon-outline" size={14} color={theme.muted} />
+              <Text style={[styles.infoText, { color: theme.muted }]}>{item.examType} (Pass: {item.passmark || '--'})</Text>
+            </View>
+          )}
+          {item.venue && (
+            <View style={styles.infoRow}>
+              <Ionicons name="location-outline" size={14} color={theme.muted} />
+              <Text style={[styles.infoText, { color: theme.muted }]}>{item.venue}</Text>
+            </View>
+          )}
         </View>
 
-      {item.status === 'Pending' && !item.isEnrollment && (
         <View style={styles.actionsRow}>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.cancelBtn]} 
-            onPress={() => updateStatus(item.id, 'Cancelled')}
-          >
-            <Text style={styles.cancelText}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.confirmBtn, { backgroundColor: theme.success }]} 
-            onPress={() => updateStatus(item.id, 'Confirmed')}
-          >
-            <Text style={styles.confirmText}>Confirm</Text>
-          </TouchableOpacity>
+          {!item.isEnrollment && (
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: theme.primary + '15' }]} 
+              onPress={() => openEditForm(item)}
+            >
+              <Ionicons name="create-outline" size={18} color={theme.primary} />
+              <Text style={[styles.actionBtnText, { color: theme.primary }]}>Edit</Text>
+            </TouchableOpacity>
+          )}
+          
+          {!item.isEnrollment && (
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: '#EF444415' }]} 
+              onPress={() => deleteBooking(item.id || item._id)}
+            >
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete</Text>
+            </TouchableOpacity>
+          )}
+
+          {item.status === 'Pending' && !item.isEnrollment && (
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: theme.success + '15' }]} 
+              onPress={() => updateStatus(item.id || item._id, 'Confirmed')}
+            >
+              <Ionicons name="checkmark-circle-outline" size={18} color={theme.success} />
+              <Text style={[styles.actionBtnText, { color: theme.success }]}>Confirm</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      )}
 
       {item.isEnrollment && (
         <View style={styles.actionsRow}>
           <TouchableOpacity 
-            style={[styles.actionBtn, { backgroundColor: theme.primary }]} 
-            onPress={() => Alert.alert('Schedule', 'Scheduling feature coming soon!')}
+            style={[styles.actionBtn, { backgroundColor: theme.primary + '15' }]} 
+            onPress={() => openEditForm({
+              learnerId: item.learnerId,
+              learnerName: item.learnerName,
+              courseTitle: item.courseTitle,
+              status: 'Pending'
+            })}
           >
-            <Text style={styles.confirmText}>Schedule Lesson</Text>
+            <Ionicons name="calendar-outline" size={18} color={theme.primary} />
+            <Text style={[styles.actionBtnText, { color: theme.primary }]}>Schedule Lesson</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -201,6 +284,17 @@ export default function BookingsPage() {
           subtitle="Manage driving lesson schedules"
           showMenuButton={true}
           onMenuPress={() => navigation.openDrawer()}
+          rightComponent={
+            <TouchableOpacity 
+              style={[styles.addBtn, { backgroundColor: theme.primary }]}
+              onPress={() => {
+                setEditingBooking(null);
+                setFormVisible(true);
+              }}
+            >
+              <Ionicons name="add" size={24} color="#FFF" />
+            </TouchableOpacity>
+          }
         />
       </View>
 
@@ -220,6 +314,24 @@ export default function BookingsPage() {
           <Text style={[styles.statLabel, { color: theme.muted }]}>Confirmed</Text>
         </View>
       </View>
+
+      <TouchableOpacity 
+        style={styles.mainAddBtn}
+        onPress={() => {
+          setEditingBooking(null);
+          setFormVisible(true);
+        }}
+      >
+        <LinearGradient
+          colors={[theme.primary, theme.secondary]}
+          style={styles.mainAddGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <Ionicons name="add-circle" size={24} color="#FFF" />
+          <Text style={styles.mainAddText}>Create a Booking</Text>
+        </LinearGradient>
+      </TouchableOpacity>
 
       <View style={[styles.searchContainer, { backgroundColor: theme.glass, borderColor: theme.glassBorder }]}>
         <Ionicons name="search" size={20} color={theme.icon} style={styles.searchIcon} />
@@ -299,6 +411,16 @@ export default function BookingsPage() {
             />
           ) : null
         }
+      />
+
+      <BookingForm
+        visible={formVisible}
+        initialData={editingBooking}
+        onClose={() => {
+          setFormVisible(false);
+          setEditingBooking(null);
+        }}
+        onSubmit={handleCreateBooking}
       />
     </SafeAreaView>
   );
@@ -455,6 +577,47 @@ const styles = StyleSheet.create({
   confirmText: {
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  mainAddBtn: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  mainAddGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 10,
+  },
+  mainAddText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
 

@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const auth = require('../middleware/auth');
 const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
 const User = require('../models/User');
@@ -7,7 +8,7 @@ const Payment = require('../models/Payment');
 
 
 // Get learner's dashboard stats (counts, next class)
-router.get('/stats/:learnerId', async (req, res) => {
+router.get('/stats/:learnerId', auth, async (req, res) => {
   try {
     const [enrollmentCount, nextClass] = await Promise.all([
       Enrollment.countDocuments({ learnerId: req.params.learnerId }),
@@ -30,7 +31,7 @@ router.get('/stats/:learnerId', async (req, res) => {
 // ─── courses ──────────────────────────────────────────────────────────────────
 
 // Get all available courses
-router.get('/courses', async (req, res) => {
+router.get('/courses', auth, async (req, res) => {
   try {
     const courses = await Course.find().sort({ createdAt: 1 });
     // Map _id to id for frontend compatibility
@@ -52,7 +53,7 @@ router.get('/courses', async (req, res) => {
 });
 
 // Enroll in a course
-router.post('/enroll', async (req, res) => {
+router.post('/enroll', auth, async (req, res) => {
   try {
     const { learnerId, courseId, paymentData } = req.body;
     if (!learnerId || !courseId) return res.status(400).json({ message: 'IDs required' });
@@ -63,7 +64,7 @@ router.post('/enroll', async (req, res) => {
 
     // Determine status based on payment method
     const paymentStatus = paymentData?.method === 'card' ? 'paid' : 'pending';
-    const status = paymentData?.method === 'card' ? 'enrolled' : 'pending_approval';
+    const status = 'pending_approval'; // All enrollments require admin approval now
 
     const enrollment = await Enrollment.create({
       learnerId,
@@ -95,7 +96,7 @@ router.post('/enroll', async (req, res) => {
 });
 
 // Get learner's enrollments
-router.get('/my-courses/:learnerId', async (req, res) => {
+router.get('/my-courses/:learnerId', auth, async (req, res) => {
   try {
     const enrollments = await Enrollment.find({ learnerId: req.params.learnerId }).sort({ createdAt: -1 });
     const mapped = enrollments.map(e => ({
@@ -118,7 +119,7 @@ router.get('/my-courses/:learnerId', async (req, res) => {
 // ─── payments ─────────────────────────────────────────────────────────────────
 
 // Pay for a course
-router.post('/pay', async (req, res) => {
+router.post('/pay', auth, async (req, res) => {
   try {
     const { enrollmentId, amount, method } = req.body;
 
@@ -150,7 +151,7 @@ router.post('/pay', async (req, res) => {
 });
 
 // Get learner's payment history
-router.get('/my-payments/:learnerId', async (req, res) => {
+router.get('/my-payments/:learnerId', auth, async (req, res) => {
   try {
     // Show all enrollments as payment items
     const enrollments = await Enrollment.find({
@@ -246,7 +247,7 @@ router.post('/approve-enrollment/:id', async (req, res) => {
 // ─── profile ──────────────────────────────────────────────────────────────────
 
 // Update profile
-router.put('/profile/:id', async (req, res) => {
+router.put('/profile/:id', auth, async (req, res) => {
   try {
     const { name, nic, phone, address } = req.body;
 
@@ -269,6 +270,29 @@ router.put('/profile/:id', async (req, res) => {
   } catch (err) {
     console.error('Profile update error:', err);
     res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+// Cancel enrollment
+router.delete('/cancel-enrollment/:id', auth, async (req, res) => {
+  try {
+    console.log('🗑️ Cancellation request for ID:', req.params.id);
+    const enrollment = await Enrollment.findById(req.params.id);
+    if (!enrollment) return res.status(404).json({ message: 'Enrollment not found' });
+
+    // Delete enrollment
+    await Enrollment.findByIdAndDelete(req.params.id);
+
+    // Delete associated bookings
+    await Booking.deleteMany({ 
+      learnerId: enrollment.learnerId, 
+      courseId: enrollment.courseId 
+    });
+
+    res.json({ message: 'Enrollment cancelled successfully' });
+  } catch (err) {
+    console.error('Cancel enrollment error:', err);
+    res.status(500).json({ message: 'Failed to cancel enrollment' });
   }
 });
 

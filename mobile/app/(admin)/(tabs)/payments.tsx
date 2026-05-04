@@ -35,11 +35,11 @@ export default function PaymentsPage() {
     try {
       setLoading(true);
       const [paymentsData, pendingData] = await Promise.all([
-        paymentsApi.list(),
+        paymentsApi.list().catch(() => []),
         adminApi.getPendingEnrollments().catch(() => [])
       ]);
       
-      const mappedPending = pendingData.map((p: any) => ({
+      const mappedPending = (pendingData || []).map((p: any) => ({
         ...p,
         _id: p._id || p.id,
         learner: p.learnerName,
@@ -47,11 +47,16 @@ export default function PaymentsPage() {
         amount: p.price,
         status: 'Awaiting Approval',
         method: p.paymentMethod,
-        date: new Date(p.createdAt).toLocaleDateString(),
+        date: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
         isEnrollment: true
       }));
 
-      setPayments([...mappedPending, ...paymentsData]);
+      const mappedPayments = (Array.isArray(paymentsData) ? paymentsData : []).map((p: any) => ({
+        ...p,
+        date: p.date || (p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A')
+      }));
+
+      setPayments([...mappedPending, ...mappedPayments]);
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'Failed to fetch payments');
@@ -92,7 +97,12 @@ export default function PaymentsPage() {
   };
 
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, isEnrollment?: boolean) => {
+    if (isEnrollment) {
+      Alert.alert('Action Required', 'Please approve or reject this enrollment instead of deleting the record directly.');
+      return;
+    }
+
     Alert.alert(
       'Delete Payment',
       'Are you sure you want to delete this payment record?',
@@ -162,7 +172,7 @@ export default function PaymentsPage() {
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={[styles.amountText, { color: theme.text }]}>{formatCurrency(amount)}</Text>
-            <TouchableOpacity onPress={() => handleDelete(item._id)} style={{ marginTop: 8 }}>
+            <TouchableOpacity onPress={() => handleDelete(item._id, item.isEnrollment)} style={{ marginTop: 8 }}>
               <Ionicons name="trash-outline" size={18} color="#EF4444" />
             </TouchableOpacity>
           </View>
@@ -222,7 +232,7 @@ export default function PaymentsPage() {
 
   const totalRevenue = payments.reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
   const completedRevenue = payments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
-  const pendingRevenue = payments.filter(p => p.status === 'Pending').reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
+  const pendingRevenue = payments.filter(p => p.status === 'Pending' || p.status === 'Awaiting Approval').reduce((sum, p) => sum + parseFloat(p.amountPaid || p.amount || '0'), 0);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -240,19 +250,19 @@ export default function PaymentsPage() {
           <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Total Revenue</Text>
             <Text style={styles.summaryValue}>{formatCurrency(totalRevenue)}</Text>
-            <Ionicons name="trending-up" size={24} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
+            <Ionicons name="trending-up" size={60} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
           </LinearGradient>
           
           <LinearGradient colors={['#10B981', '#059669']} style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Completed</Text>
             <Text style={styles.summaryValue}>{formatCurrency(completedRevenue)}</Text>
-            <Ionicons name="checkmark-circle" size={24} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
+            <Ionicons name="checkmark-circle" size={60} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
           </LinearGradient>
  
           <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Pending</Text>
             <Text style={styles.summaryValue}>{formatCurrency(pendingRevenue)}</Text>
-            <Ionicons name="time" size={24} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
+            <Ionicons name="time" size={60} color="rgba(255,255,255,0.3)" style={styles.summaryIcon} />
           </LinearGradient>
         </ScrollView>
       </View>
@@ -448,6 +458,11 @@ const styles = StyleSheet.create({
   learnerName: {
     fontSize: 16,
     fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  courseText: {
+    fontSize: 12,
+    fontWeight: '500',
     marginBottom: 2,
   },
   dateText: {

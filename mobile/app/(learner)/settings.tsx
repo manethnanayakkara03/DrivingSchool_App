@@ -16,6 +16,38 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { learnerApi, getUser, setUser, clearToken, clearUser } from '@/services/api';
 import { router } from 'expo-router';
 
+
+// ── Sub-component for Input Fields ──
+// Defined outside to prevent re-creation on every render (which causes focus loss)
+const Field = ({
+  label, value, onChange, icon, placeholder, theme, colorScheme, error, keyboard = 'default'
+}: {
+  label: string; value: string; onChange: (t: string) => void;
+  icon: any; placeholder: string; theme: any; colorScheme: string; error?: string; keyboard?: any;
+}) => (
+  <View style={styles.fieldWrap}>
+    <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
+    <View style={[
+      styles.fieldBox, 
+      { 
+        borderColor: error ? '#EF4444' : theme.secondary + '30', 
+        backgroundColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' 
+      }
+    ]}>
+      <Ionicons name={icon} size={18} color={error ? '#EF4444' : theme.icon} style={styles.fieldIcon} />
+      <TextInput
+        style={[styles.fieldInput, { color: theme.text }]}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={theme.icon + '70'}
+        keyboardType={keyboard}
+      />
+    </View>
+    {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+  </View>
+);
+
 export default function SettingsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
@@ -26,8 +58,43 @@ export default function SettingsScreen() {
   const [phone, setPhone]     = useState(user?.phone   || '');
   const [address, setAddress] = useState(user?.address || '');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors]   = useState<Record<string, string>>({});
+
+  const validate = (field: string, val: string) => {
+    let err = '';
+    if (field === 'name') {
+      if (!val.trim()) err = 'Name is required';
+      else if (val.length < 3) err = 'Name must be at least 3 characters';
+    }
+    if (field === 'nic') {
+      const nicRegex = /^([0-9]{9}[vVxX]|[0-9]{12})$/;
+      if (!val.trim()) err = 'NIC is required';
+      else if (!nicRegex.test(val)) err = 'Invalid NIC format (9 digits + V/X or 12 digits)';
+    }
+    if (field === 'phone') {
+      const phoneRegex = /^0[0-9]{9}$/;
+      if (!val.trim()) err = 'Phone number is required';
+      else if (!phoneRegex.test(val)) err = 'Invalid phone number (must be 10 digits starting with 0)';
+    }
+    if (field === 'address') {
+      if (!val.trim()) err = 'Address is required';
+    }
+
+    setErrors(prev => ({ ...prev, [field]: err }));
+    return !err;
+  };
 
   const handleUpdate = async () => {
+    const isNameValid = validate('name', name);
+    const isNicValid = validate('nic', nic);
+    const isPhoneValid = validate('phone', phone);
+    const isAddressValid = validate('address', address);
+
+    if (!isNameValid || !isNicValid || !isPhoneValid || !isAddressValid) {
+      Alert.alert('Validation Error', 'Please correct the errors before saving.');
+      return;
+    }
+
     if (!user?.id) return;
     setLoading(true);
     try {
@@ -51,27 +118,7 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const Field = ({
-    label, value, onChange, icon, placeholder, keyboard = 'default'
-  }: {
-    label: string; value: string; onChange: (t: string) => void;
-    icon: any; placeholder: string; keyboard?: any;
-  }) => (
-    <View style={styles.fieldWrap}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <View style={[styles.fieldBox, { borderColor: theme.secondary + '30', backgroundColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-        <Ionicons name={icon} size={18} color={theme.icon} style={styles.fieldIcon} />
-        <TextInput
-          style={[styles.fieldInput, { color: theme.text }]}
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={theme.icon + '70'}
-          keyboardType={keyboard}
-        />
-      </View>
-    </View>
-  );
+  const hasErrors = Object.values(errors).some(e => e !== '') || !name || !nic || !phone || !address;
 
   return (
     <ThemedView style={styles.container}>
@@ -81,7 +128,7 @@ export default function SettingsScreen() {
       />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -120,10 +167,47 @@ export default function SettingsScreen() {
                 <ThemedText style={styles.sectionTitle}>Personal Details</ThemedText>
               </View>
 
-              <Field label="Full Name"    value={name}    onChange={setName}    icon="person-outline"   placeholder="John Doe" />
-              <Field label="NIC Number"   value={nic}     onChange={setNic}     icon="card-outline"     placeholder="123456789V" />
-              <Field label="Phone"        value={phone}   onChange={setPhone}   icon="call-outline"     placeholder="071 234 5678" keyboard="phone-pad" />
-              <Field label="Home Address" value={address} onChange={setAddress} icon="home-outline"     placeholder="123 Main St, Colombo" />
+              <Field 
+                label="Full Name" 
+                value={name} 
+                onChange={(t) => { setName(t); validate('name', t); }} 
+                icon="person-outline" 
+                placeholder="John Doe" 
+                theme={theme} 
+                colorScheme={colorScheme} 
+                error={errors.name}
+              />
+              <Field 
+                label="NIC Number" 
+                value={nic} 
+                onChange={(t) => { setNic(t); validate('nic', t); }} 
+                icon="card-outline" 
+                placeholder="123456789V" 
+                theme={theme} 
+                colorScheme={colorScheme} 
+                error={errors.nic}
+              />
+              <Field 
+                label="Phone" 
+                value={phone} 
+                onChange={(t) => { setPhone(t); validate('phone', t); }} 
+                icon="call-outline" 
+                placeholder="071 234 5678" 
+                keyboard="phone-pad" 
+                theme={theme} 
+                colorScheme={colorScheme} 
+                error={errors.phone}
+              />
+              <Field 
+                label="Home Address" 
+                value={address} 
+                onChange={(t) => { setAddress(t); validate('address', t); }} 
+                icon="home-outline" 
+                placeholder="123 Main St, Colombo" 
+                theme={theme} 
+                colorScheme={colorScheme} 
+                error={errors.address}
+              />
             </Animated.View>
 
             {/* ── Account ── */}
@@ -143,9 +227,9 @@ export default function SettingsScreen() {
             {/* ── Actions ── */}
             <Animated.View entering={FadeInDown.delay(400).duration(700)}>
               <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: theme.secondary }]}
+                style={[styles.saveBtn, { backgroundColor: hasErrors ? theme.muted : theme.secondary }]}
                 onPress={handleUpdate}
-                disabled={loading}
+                disabled={loading || hasErrors}
               >
                 {loading
                   ? <ActivityIndicator color="#fff" />
@@ -220,6 +304,7 @@ const styles = StyleSheet.create({
   },
   fieldIcon: { marginRight: 12 },
   fieldInput: { flex: 1, fontSize: 15, fontWeight: '600' },
+  errorText: { color: '#EF4444', fontSize: 11, marginTop: 4, marginLeft: 4, fontWeight: '600' },
 
   readOnly: {
     padding: 18, borderRadius: 16,

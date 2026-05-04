@@ -15,6 +15,40 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { instructorApi, getUser, setUser, clearToken, clearUser } from '@/services/api';
 import { router } from 'expo-router';
 
+const Field = ({
+  label, value, onChange, icon, placeholder, fieldName, errors, theme, colorScheme, keyboard = 'default', validate
+}: {
+  label: string; value: string; onChange: (t: string) => void;
+  icon: any; placeholder: string; fieldName: string; errors: any; theme: any; colorScheme: any; keyboard?: any; validate: any;
+}) => (
+  <View style={styles.fieldWrap}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
+      {errors[fieldName] ? (
+        <ThemedText style={[styles.errorText, { color: '#EF4444' }]}>{errors[fieldName]}</ThemedText>
+      ) : null}
+    </View>
+    <View style={[
+      styles.fieldBox, 
+      { borderColor: errors[fieldName] ? '#EF4444' : theme.primary + '30' },
+      { backgroundColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }
+    ]}>
+      <Ionicons name={icon} size={18} color={errors[fieldName] ? '#EF4444' : theme.icon} style={styles.fieldIcon} />
+      <TextInput
+        style={[styles.fieldInput, { color: theme.text }]}
+        value={value}
+        onChangeText={(text) => {
+          onChange(text);
+          validate(fieldName, text);
+        }}
+        placeholder={placeholder}
+        placeholderTextColor={theme.icon + '70'}
+        keyboardType={keyboard}
+      />
+    </View>
+  </View>
+);
+
 export default function InstructorSettingsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
@@ -28,6 +62,7 @@ export default function InstructorSettingsScreen() {
   const [experience, setExperience] = useState('');
   const [loading, setLoading]       = useState(false);
   const [fetching, setFetching]     = useState(true);
+  const [errors, setErrors]         = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -49,7 +84,39 @@ export default function InstructorSettingsScreen() {
     fetchProfile();
   }, []);
 
+  const validate = (field: string, value: string) => {
+    let error = '';
+    if (field === 'name') {
+      if (!value) error = 'Name is required';
+      else if (value.length < 3) error = 'Name is too short';
+    } else if (field === 'nic') {
+      const nicRegex = /^(?:\d{9}[vVxX]|\d{12})$/;
+      if (!value) error = 'NIC is required';
+      else if (!nicRegex.test(value)) error = 'Invalid NIC format';
+    } else if (field === 'phone') {
+      const phoneRegex = /^\d{10}$/;
+      if (!value) error = 'Phone is required';
+      else if (!phoneRegex.test(value.replace(/\s/g, ''))) error = 'Phone must be 10 digits';
+    } else if (field === 'address') {
+      if (!value) error = 'Address is required';
+      else if (value.length < 5) error = 'Address is too short';
+    }
+
+    setErrors(prev => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
   const handleUpdate = async () => {
+    const isNameValid = validate('name', name);
+    const isNicValid = validate('nic', nic);
+    const isPhoneValid = validate('phone', phone);
+    const isAddressValid = validate('address', address);
+
+    if (!isNameValid || !isNicValid || !isPhoneValid || !isAddressValid) {
+      Alert.alert('Validation Error', 'Please fix the errors before saving.');
+      return;
+    }
+
     if (!user?.id) return;
     setLoading(true);
     try {
@@ -74,28 +141,6 @@ export default function InstructorSettingsScreen() {
       }
     ]);
   };
-
-  const Field = ({
-    label, value, onChange, icon, placeholder, keyboard = 'default'
-  }: {
-    label: string; value: string; onChange: (t: string) => void;
-    icon: any; placeholder: string; keyboard?: any;
-  }) => (
-    <View style={styles.fieldWrap}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <View style={[styles.fieldBox, { borderColor: theme.primary + '30', backgroundColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-        <Ionicons name={icon} size={18} color={theme.icon} style={styles.fieldIcon} />
-        <TextInput
-          style={[styles.fieldInput, { color: theme.text }]}
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={theme.icon + '70'}
-          keyboardType={keyboard}
-        />
-      </View>
-    </View>
-  );
 
   if (fetching) {
     return (
@@ -152,10 +197,10 @@ export default function InstructorSettingsScreen() {
                 <ThemedText style={styles.sectionTitle}>Personal Details</ThemedText>
               </View>
 
-              <Field label="Full Name"    value={name}    onChange={setName}    icon="person-outline"   placeholder="John Doe" />
-              <Field label="NIC Number"   value={nic}     onChange={setNic}     icon="card-outline"     placeholder="123456789V" />
-              <Field label="Phone"        value={phone}   onChange={setPhone}   icon="call-outline"     placeholder="071 234 5678" keyboard="phone-pad" />
-              <Field label="Home Address" value={address} onChange={setAddress} icon="home-outline"     placeholder="123 Main St, Colombo" />
+              <Field label="Full Name"    value={name}    onChange={setName}    fieldName="name"    errors={errors} theme={theme} colorScheme={colorScheme} validate={validate} icon="person-outline"   placeholder="John Doe" />
+              <Field label="NIC Number"   value={nic}     onChange={setNic}     fieldName="nic"     errors={errors} theme={theme} colorScheme={colorScheme} validate={validate} icon="card-outline"     placeholder="123456789V" />
+              <Field label="Phone"        value={phone}   onChange={setPhone}   fieldName="phone"   errors={errors} theme={theme} colorScheme={colorScheme} validate={validate} icon="call-outline"     placeholder="071 234 5678" keyboard="phone-pad" />
+              <Field label="Home Address" value={address} onChange={setAddress} fieldName="address" errors={errors} theme={theme} colorScheme={colorScheme} validate={validate} icon="home-outline"     placeholder="123 Main St, Colombo" />
             </Animated.View>
 
             {/* Professional Details */}
@@ -165,8 +210,8 @@ export default function InstructorSettingsScreen() {
                 <ThemedText style={styles.sectionTitle}>Professional Details</ThemedText>
               </View>
 
-              <Field label="Specialty"    value={specialty}  onChange={setSpecialty}  icon="ribbon-outline"  placeholder="Manual / Auto Expert" />
-              <Field label="Experience"   value={experience} onChange={setExperience} icon="time-outline"    placeholder="5 Years" />
+              <Field label="Specialty"    value={specialty}  onChange={setSpecialty}  fieldName="specialty"  errors={errors} theme={theme} colorScheme={colorScheme} validate={validate} icon="ribbon-outline"  placeholder="Manual / Auto Expert" />
+              <Field label="Experience"   value={experience} onChange={setExperience} fieldName="experience" errors={errors} theme={theme} colorScheme={colorScheme} validate={validate} icon="time-outline"    placeholder="5 Years" />
             </Animated.View>
 
             {/* Account */}
@@ -234,6 +279,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '800', marginLeft: 8 },
   fieldWrap: { marginBottom: 18 },
   fieldLabel: { fontSize: 13, fontWeight: '700', opacity: 0.7, marginBottom: 8, marginLeft: 2 },
+  errorText: { fontSize: 11, fontWeight: '600', marginBottom: 8 },
   fieldBox: { flexDirection: 'row', alignItems: 'center', height: 56, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16 },
   fieldIcon: { marginRight: 12 },
   fieldInput: { flex: 1, fontSize: 15, fontWeight: '600' },

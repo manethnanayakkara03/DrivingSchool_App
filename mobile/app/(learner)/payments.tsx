@@ -75,6 +75,29 @@ export default function PaymentsScreen() {
             <View style={[styles.headerDivider, { backgroundColor: theme.secondary + '20' }]} />
           </Animated.View>
 
+          {/* ── Summary Cards (Row Wise) ── */}
+          <View style={styles.summaryRow}>
+            <GlassView style={[styles.summaryCard, { borderColor: '#10B98130' }]}>
+              <View style={[styles.summaryIcon, { backgroundColor: '#10B98115' }]}>
+                <Ionicons name="checkmark-done" size={20} color="#10B981" />
+              </View>
+              <ThemedText style={styles.summaryLabel}>Total Paid</ThemedText>
+              <ThemedText style={[styles.summaryValue, { color: '#10B981' }]}>
+                LKR {payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}
+              </ThemedText>
+            </GlassView>
+
+            <GlassView style={[styles.summaryCard, { borderColor: '#F59E0B30' }]}>
+              <View style={[styles.summaryIcon, { backgroundColor: '#F59E0B15' }]}>
+                <Ionicons name="time" size={20} color="#F59E0B" />
+              </View>
+              <ThemedText style={styles.summaryLabel}>Pending</ThemedText>
+              <ThemedText style={[styles.summaryValue, { color: '#F59E0B' }]}>
+                LKR {payments.filter(p => p.status !== 'completed').reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}
+              </ThemedText>
+            </GlassView>
+          </View>
+
           {/* ── Pending payment banner ── */}
           {enrollmentId && (
             <Animated.View entering={FadeInDown.delay(200)}>
@@ -169,6 +192,12 @@ const styles = StyleSheet.create({
   headerDivider: { height: 2, borderRadius: 1, marginTop: 16 },
   title: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   subtitle: { fontSize: 13, opacity: 0.5, marginTop: 3, lineHeight: 18 },
+
+  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 25 },
+  summaryCard: { flex: 1, padding: 16, borderRadius: 24, borderWidth: 1 },
+  summaryIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  summaryLabel: { fontSize: 12, opacity: 0.6, fontWeight: '700' },
+  summaryValue: { fontSize: 15, fontWeight: '900', marginTop: 2 },
 
   pendingCard: {
     padding: 20, borderRadius: 22, marginBottom: 24,

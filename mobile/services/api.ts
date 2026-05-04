@@ -47,13 +47,30 @@ function headers(extra?: Record<string, string>) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const h = headers();
+  const url = `${BASE_URL}${path}`;
+  
+  const res = await fetch(url, {
     method,
-    headers: headers(),
+    headers: h,
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Request failed');
+  
+  const contentType = res.headers.get('content-type');
+  let data: any;
+  
+  if (contentType && contentType.includes('application/json')) {
+    data = await res.json();
+  } else {
+    const text = await res.text();
+    console.error(`❌ Non-JSON response from ${url}:`, text.substring(0, 100));
+    throw new Error(`Server returned non-JSON response (${res.status})`);
+  }
+  
+  if (!res.ok) {
+    console.error(`❌ Request failed: ${method} ${path}`, data.message);
+    throw new Error(data.message || 'Request failed');
+  }
   return data as T;
 }
 
@@ -83,12 +100,14 @@ export const learnerApi = {
     request<any>('POST', '/api/learner/pay', { enrollmentId, amount, method }),
   getMyPayments: (learnerId: string) => request<any[]>('GET', `/api/learner/my-payments/${learnerId}`),
   updateProfile: (id: string, data: any) => request<any>('PUT', `/api/learner/profile/${id}`, data),
+  cancelEnrollment: (id: string) => request<any>('DELETE', `/api/learner/cancel-enrollment/${id}`),
 };
 
 // ─── instructor ───────────────────────────────────────────────────────────────
 
 export const instructorApi = {
-  getMyStudents: (email: string) => request<any[]>('GET', `/api/instructor/my-students/${email}`),
+  getMyCourses: (name: string) => request<any[]>('GET', `/api/instructor/my-courses/${name}`),
+  getMyStudents: (name: string) => request<any[]>('GET', `/api/instructor/my-students/${name}`),
   updateEnrollmentStatus: (id: string, data: { status: string; progress: number }) => 
     request<any>('PUT', `/api/instructor/enrollment-status/${id}`, data),
   getProfile: (email: string) => request<any>('GET', `/api/instructor/profile/${email}`),

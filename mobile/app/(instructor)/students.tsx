@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Modal, TextInput, Alert
+  ActivityIndicator, RefreshControl, Modal, TextInput, Alert, Keyboard, TouchableWithoutFeedback
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
@@ -23,6 +23,7 @@ export default function InstructorStudentsScreen() {
   const [students, setStudents] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState('active'); // 'active' or 'completed'
 
   // Status Update Modal State
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -32,9 +33,9 @@ export default function InstructorStudentsScreen() {
   const [updating, setUpdating] = useState(false);
 
   const fetchData = async () => {
-    if (!user?.email) { setLoading(false); return; }
+    if (!user?.name) { setLoading(false); return; }
     try {
-      const data = await instructorApi.getMyStudents(user.email);
+      const data = await instructorApi.getMyStudents(user.name);
       setStudents(data);
     } catch (err) {
       console.error('Fetch students error:', err);
@@ -62,6 +63,7 @@ export default function InstructorStudentsScreen() {
         status: newStatus,
         progress: newProgress
       });
+      Keyboard.dismiss();
       setModalVisible(false);
       fetchData();
       Alert.alert('Success', 'Student status updated successfully');
@@ -73,10 +75,17 @@ export default function InstructorStudentsScreen() {
     }
   };
 
-  const filteredStudents = students.filter(s => 
-    s.learnerId.toLowerCase().includes(search.toLowerCase()) || 
-    s.courseTitle.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredStudents = students.filter(s => {
+    const searchLower = search.toLowerCase();
+    const name = (s.learnerName || '').toLowerCase();
+    const id = (s.learnerId || '').toLowerCase();
+    const course = (s.courseTitle || '').toLowerCase();
+    
+    const matchesSearch = name.includes(searchLower) || id.includes(searchLower) || course.includes(searchLower);
+    const matchesTab = tab === 'active' ? s.status !== 'completed' : s.status === 'completed';
+
+    return matchesSearch && matchesTab;
+  });
 
   return (
     <ThemedView style={styles.container}>
@@ -88,6 +97,21 @@ export default function InstructorStudentsScreen() {
         <View style={styles.header}>
           <ThemedText style={styles.title}>My Students</ThemedText>
           <ThemedText style={styles.subtitle}>Manage enrollments and progress</ThemedText>
+        </View>
+
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tab, tab === 'active' && { backgroundColor: theme.primary, borderColor: theme.primary }]} 
+            onPress={() => setTab('active')}
+          >
+            <ThemedText style={[styles.tabText, tab === 'active' && { color: '#fff' }]}>Active</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, tab === 'completed' && { backgroundColor: theme.primary, borderColor: theme.primary }]} 
+            onPress={() => setTab('completed')}
+          >
+            <ThemedText style={[styles.tabText, tab === 'completed' && { color: '#fff' }]}>Completed</ThemedText>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.searchContainer}>
@@ -117,11 +141,11 @@ export default function InstructorStudentsScreen() {
                   <View style={styles.cardHeader}>
                     <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
                       <ThemedText style={[styles.avatarText, { color: theme.primary }]}>
-                        {student.learnerId.substring(0, 2).toUpperCase()}
+                        {(student.learnerName || student.learnerId || '??').substring(0, 2).toUpperCase()}
                       </ThemedText>
                     </View>
                     <View style={styles.studentInfo}>
-                      <ThemedText style={styles.studentName}>Student ID: {student.learnerId}</ThemedText>
+                      <ThemedText style={styles.studentName}>{student.learnerName || 'Unknown Student'}</ThemedText>
                       <ThemedText style={styles.courseName}>{student.courseTitle}</ThemedText>
                     </View>
                     <View style={[styles.statusBadge, { 
@@ -148,13 +172,20 @@ export default function InstructorStudentsScreen() {
                     </View>
                   </View>
 
-                  <TouchableOpacity 
-                    style={[styles.updateBtn, { borderColor: theme.primary + '40' }]}
-                    onPress={() => handleUpdateStatus(student)}
-                  >
-                    <ThemedText style={[styles.updateBtnText, { color: theme.primary }]}>Update Status</ThemedText>
-                    <Ionicons name="create-outline" size={16} color={theme.primary} />
-                  </TouchableOpacity>
+                  {student.status !== 'completed' ? (
+                    <TouchableOpacity 
+                      style={[styles.updateBtn, { borderColor: theme.primary + '40' }]}
+                      onPress={() => handleUpdateStatus(student)}
+                    >
+                      <ThemedText style={[styles.updateBtnText, { color: theme.primary }]}>Update Status</ThemedText>
+                      <Ionicons name="create-outline" size={16} color={theme.primary} />
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.completedBanner, { backgroundColor: '#10B98115' }]}>
+                      <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                      <ThemedText style={[styles.completedText, { color: '#10B981' }]}>Course Completed</ThemedText>
+                    </View>
+                  )}
                 </GlassView>
               </Animated.View>
             ))
@@ -175,8 +206,9 @@ export default function InstructorStudentsScreen() {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <GlassView style={styles.modalContent}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <GlassView style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>Update Progress</ThemedText>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -235,7 +267,8 @@ export default function InstructorStudentsScreen() {
             </TouchableOpacity>
           </GlassView>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
     </ThemedView>
   );
 }
@@ -243,6 +276,9 @@ export default function InstructorStudentsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
+  tabContainer: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 15, gap: 10 },
+  tab: { flex: 1, height: 40, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center' },
+  tabText: { fontSize: 14, fontWeight: '700', opacity: 0.8 },
   header: { paddingHorizontal: 20, paddingTop: 10, marginBottom: 20 },
   title: { fontSize: 28, fontWeight: '900' },
   subtitle: { fontSize: 14, opacity: 0.6, marginTop: 4 },
@@ -267,6 +303,8 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 4 },
   updateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 40, borderRadius: 12, borderWidth: 1, gap: 8 },
   updateBtnText: { fontSize: 14, fontWeight: '700' },
+  completedBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 40, borderRadius: 12, gap: 8 },
+  completedText: { fontSize: 14, fontWeight: '800' },
   emptyState: { alignItems: 'center', marginTop: 100 },
   emptyText: { fontSize: 16, opacity: 0.5, marginTop: 15 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },

@@ -44,6 +44,12 @@ const customLookup = async (hostname, options, callback) => {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.url}`);
+  next();
+});
+
 // MongoDB Connection (Required)
 const connectMongo = async () => {
   if (!process.env.MONGODB_URI) {
@@ -99,6 +105,20 @@ app.use('/api/courses',     crudRouter(Course,      'CRS'));
 
 // Health check
 app.get('/', (req, res) => res.send('Arampath Driving School API is running ✅'));
+
+// 404 Handler
+app.use((req, res, next) => {
+  res.status(404).json({ message: `Route ${req.method} ${req.url} not found` });
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('💥 Global Error:', err.stack);
+  res.status(err.status || 500).json({
+    message: err.message || 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err : {}
+  });
+});
 
 // Start server only after MongoDB is connected
 connectMongo().then(() => {

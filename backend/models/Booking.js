@@ -13,6 +13,9 @@ const BookingSchema = new mongoose.Schema({
   status:       { type: String, enum: ['Pending', 'Confirmed', 'Cancelled'], default: 'Pending' },
   courseId:     { type: String },
   courseTitle:  { type: String },
+  examType:     { type: String }, // e.g. "Written", "Practical"
+  venue:        { type: String },
+  passmark:     { type: String },
   idCode:       { type: String },
   color:        { type: String },
 

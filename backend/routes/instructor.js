@@ -1,17 +1,31 @@
 const router = require('express').Router();
 const Instructor = require('../models/Instructor');
+const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
 const User = require('../models/User');
 
-// Get students enrolled in instructor's courses
-router.get('/my-students/:email', async (req, res) => {
+// Get courses assigned to this instructor
+router.get('/my-courses/:name', async (req, res) => {
   try {
-    const instructor = await Instructor.findOne({ email: req.params.email });
-    if (!instructor) return res.status(404).json({ message: 'Instructor not found' });
+    const name = req.params.name;
+    const courses = await Course.find({ 
+      assignedInstructor: { $regex: new RegExp(name, 'i') } 
+    }).sort({ createdAt: -1 });
+    res.json(courses);
+  } catch (err) {
+    console.error('Fetch instructor courses error:', err);
+    res.status(500).json({ message: 'Failed to fetch courses' });
+  }
+});
 
-    // Assuming instructor.course is the title of the course they teach
-    // If they teach multiple courses (comma separated or similar), we handle that
-    const courseTitles = instructor.course.split(',').map(c => c.trim());
+// Get students enrolled in instructor's courses
+router.get('/my-students/:name', async (req, res) => {
+  try {
+    const name = req.params.name;
+    const courses = await Course.find({ 
+      assignedInstructor: { $regex: new RegExp(name, 'i') } 
+    });
+    const courseTitles = courses.map(c => c.title);
 
     const enrollments = await Enrollment.find({
       courseTitle: { $in: courseTitles }

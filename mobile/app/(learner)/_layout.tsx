@@ -35,8 +35,15 @@ export default function LearnerLayout() {
       <Tabs.Screen
         name="courses"
         options={{
-          title: 'Courses',
+          title: 'All Courses',
           tabBarIcon: ({ color }) => <Ionicons size={26} name="car" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="my-courses"
+        options={{
+          title: 'My Courses',
+          tabBarIcon: ({ color }) => <Ionicons size={26} name="book" color={color} />,
         }}
       />
       <Tabs.Screen

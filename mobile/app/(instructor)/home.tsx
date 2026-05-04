@@ -22,13 +22,23 @@ export default function InstructorHomeScreen() {
 
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async () => {
-    if (!user?.email) { setLoading(false); return; }
+    if (!user?.name) { 
+      console.warn('⚠️ No user name found for instructor');
+      setLoading(false); 
+      return; 
+    }
     try {
-      const data = await instructorApi.getMyStudents(user.email);
-      setStudents(data);
+      console.log('📡 Fetching data for instructor:', user.name);
+      const [coursesData, studentsData] = await Promise.all([
+        instructorApi.getMyCourses(user.name),
+        instructorApi.getMyStudents(user.name)
+      ]);
+      setCourses(coursesData);
+      setStudents(studentsData);
     } catch (err) {
       console.error('Fetch instructor data error:', err);
     } finally {
@@ -39,9 +49,6 @@ export default function InstructorHomeScreen() {
 
   useEffect(() => { fetchData(); }, []);
   const onRefresh = () => { setRefreshing(true); fetchData(); };
-
-  // Group students by course
-  const courses = Array.from(new Set(students.map(s => s.courseTitle)));
 
   return (
     <ThemedView style={styles.container}>
@@ -101,20 +108,20 @@ export default function InstructorHomeScreen() {
           {loading ? (
             <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
           ) : courses.length > 0 ? (
-            courses.map((courseTitle, i) => {
-              const courseStudents = students.filter(s => s.courseTitle === courseTitle);
+            courses.map((course, i) => {
+              const courseStudents = students.filter(s => s.courseTitle === course.title);
               const completedCount = courseStudents.filter(s => s.status === 'completed').length;
               const progress = courseStudents.length > 0 ? (completedCount / courseStudents.length) * 100 : 0;
 
               return (
-                <Animated.View key={courseTitle} entering={FadeInDown.delay(300 + i * 100)}>
+                <Animated.View key={course._id || i} entering={FadeInDown.delay(300 + i * 100)}>
                   <GlassView style={styles.courseCard}>
                     <View style={styles.courseTop}>
                       <View style={[styles.courseIcon, { backgroundColor: theme.primary + '18' }]}>
                         <Ionicons name="school" size={24} color={theme.primary} />
                       </View>
                       <View style={styles.courseInfo}>
-                        <ThemedText style={styles.courseName}>{courseTitle}</ThemedText>
+                        <ThemedText style={styles.courseName}>{course.title}</ThemedText>
                         <ThemedText style={styles.statusText}>{courseStudents.length} Students Enrolled</ThemedText>
                       </View>
                     </View>
