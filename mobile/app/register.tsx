@@ -31,6 +31,62 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [fieldErrors, setFieldErrors] = useState({
+    name: '',
+    nic: '',
+    phone: '',
+    address: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  const validateField = (field: string, value: string) => {
+    let errorMsg = '';
+    switch (field) {
+      case 'name':
+        if (!value) errorMsg = 'Full name is required';
+        else if (value.trim().length < 3) errorMsg = 'Name must be at least 3 characters';
+        break;
+      case 'nic':
+        const nicRegexOld = /^[0-9]{9}[vVxX]$/;
+        const nicRegexNew = /^[0-9]{12}$/;
+        if (!value) errorMsg = 'NIC number is required';
+        else if (!nicRegexOld.test(value) && !nicRegexNew.test(value)) errorMsg = 'Invalid NIC format (9 digits + V/X or 12 digits)';
+        break;
+      case 'phone':
+        const phoneRegex = /^0[0-9]{9}$/;
+        if (!value) errorMsg = 'Phone number is required';
+        else if (!phoneRegex.test(value)) errorMsg = 'Invalid phone number (e.g. 07XXXXXXXX)';
+        break;
+      case 'address':
+        if (!value) errorMsg = 'Address is required';
+        else if (value.trim().length < 5) errorMsg = 'Address is too short';
+        break;
+      case 'email':
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!value) errorMsg = 'Email is required';
+        else if (!emailRegex.test(value)) errorMsg = 'Invalid email address';
+        break;
+      case 'password':
+        if (!value) errorMsg = 'Password is required';
+        else if (value.length < 8) errorMsg = 'Password must be at least 8 characters';
+        break;
+      case 'confirmPassword':
+        if (!value) errorMsg = 'Please confirm your password';
+        else if (value !== password) errorMsg = 'Passwords do not match';
+        break;
+    }
+    setFieldErrors(prev => ({ ...prev, [field]: errorMsg }));
+    return errorMsg;
+  };
+
+  const isStep1Valid = name && nic && phone && address && 
+    !fieldErrors.name && !fieldErrors.nic && !fieldErrors.phone && !fieldErrors.address;
+  
+  const isStep2Valid = email && password && confirmPassword && 
+    !fieldErrors.email && !fieldErrors.password && !fieldErrors.confirmPassword;
+
   const buttonScale = useSharedValue(1);
   const animatedButtonStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
@@ -40,8 +96,13 @@ export default function RegisterScreen() {
   const onPressOut = () => { buttonScale.value = withTiming(1, { duration: 100 }); };
 
   const handleNext = () => {
-    if (!name || !nic || !phone || !address) {
-      setError('Please fill in all personal details');
+    const nameErr = validateField('name', name);
+    const nicErr = validateField('nic', nic);
+    const phoneErr = validateField('phone', phone);
+    const addressErr = validateField('address', address);
+
+    if (nameErr || nicErr || phoneErr || addressErr) {
+      setError('Please fix the errors before continuing');
       return;
     }
     setError('');
@@ -49,12 +110,12 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    if (!email || !password || !confirmPassword) {
-      setError('Please fill in all account details');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    const emailErr = validateField('email', email);
+    const passwordErr = validateField('password', password);
+    const confirmErr = validateField('confirmPassword', confirmPassword);
+
+    if (emailErr || passwordErr || confirmErr) {
+      setError('Please fix the errors before registering');
       return;
     }
     
@@ -131,68 +192,84 @@ export default function RegisterScreen() {
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.name ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="person-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="person-outline" size={20} color={fieldErrors.name ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="John Doe"
                     placeholderTextColor={theme.icon}
                     value={name}
-                    onChangeText={setName}
+                    onChangeText={(val) => {
+                      setName(val);
+                      validateField('name', val);
+                    }}
                   />
                 </GlassView>
+                {fieldErrors.name ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.name}</ThemedText> : null}
 
                 <ThemedText style={[styles.label, { marginTop: 16 }]}>NIC Number</ThemedText>
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.nic ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="card-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="card-outline" size={20} color={fieldErrors.nic ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="123456789V"
                     placeholderTextColor={theme.icon}
                     value={nic}
-                    onChangeText={setNic}
+                    onChangeText={(val) => {
+                      setNic(val);
+                      validateField('nic', val);
+                    }}
                     autoCapitalize="characters"
                   />
                 </GlassView>
+                {fieldErrors.nic ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.nic}</ThemedText> : null}
 
                 <ThemedText style={[styles.label, { marginTop: 16 }]}>Phone Number</ThemedText>
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.phone ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="call-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="call-outline" size={20} color={fieldErrors.phone ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="071 234 5678"
                     placeholderTextColor={theme.icon}
                     value={phone}
-                    onChangeText={setPhone}
+                    onChangeText={(val) => {
+                      setPhone(val);
+                      validateField('phone', val);
+                    }}
                     keyboardType="phone-pad"
                   />
                 </GlassView>
+                {fieldErrors.phone ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.phone}</ThemedText> : null}
 
                 <ThemedText style={[styles.label, { marginTop: 16 }]}>Home Address</ThemedText>
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.address ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="home-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="home-outline" size={20} color={fieldErrors.address ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="No. 123, Street, City"
                     placeholderTextColor={theme.icon}
                     value={address}
-                    onChangeText={setAddress}
+                    onChangeText={(val) => {
+                      setAddress(val);
+                      validateField('address', val);
+                    }}
                     multiline
                   />
                 </GlassView>
+                {fieldErrors.address ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.address}</ThemedText> : null}
               </>
             ) : (
               <>
@@ -200,53 +277,65 @@ export default function RegisterScreen() {
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.email ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="mail-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="mail-outline" size={20} color={fieldErrors.email ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="email@example.com"
                     placeholderTextColor={theme.icon}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(val) => {
+                      setEmail(val);
+                      validateField('email', val);
+                    }}
                     autoCapitalize="none"
                     keyboardType="email-address"
                   />
                 </GlassView>
+                {fieldErrors.email ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.email}</ThemedText> : null}
 
                 <ThemedText style={[styles.label, { marginTop: 16 }]}>Password</ThemedText>
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.password ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="lock-closed-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={20} color={fieldErrors.password ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="••••••••"
                     placeholderTextColor={theme.icon}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      validateField('password', val);
+                    }}
                     secureTextEntry
                   />
                 </GlassView>
+                {fieldErrors.password ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.password}</ThemedText> : null}
 
                 <ThemedText style={[styles.label, { marginTop: 16 }]}>Confirm Password</ThemedText>
                 <GlassView 
                   style={[styles.inputContainer, { backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]} 
                   intensity={Platform.OS === 'ios' ? 20 : 0}
-                  contentStyle={styles.inputGlassContent}
+                  contentStyle={[styles.inputGlassContent, fieldErrors.confirmPassword ? { borderColor: '#EF4444' } : {}]}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={20} color={theme.icon} style={styles.inputIcon} />
+                  <Ionicons name="checkmark-circle-outline" size={20} color={fieldErrors.confirmPassword ? '#EF4444' : theme.icon} style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, { color: theme.text }]}
                     placeholder="••••••••"
                     placeholderTextColor={theme.icon}
                     value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                    onChangeText={(val) => {
+                      setConfirmPassword(val);
+                      validateField('confirmPassword', val);
+                    }}
                     secureTextEntry
                   />
                 </GlassView>
+                {fieldErrors.confirmPassword ? <ThemedText style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</ThemedText> : null}
               </>
             )}
 
@@ -262,7 +351,7 @@ export default function RegisterScreen() {
             >
               <Animated.View style={[
                 styles.registerButton, 
-                { backgroundColor: loading ? theme.secondary + '99' : theme.secondary }, 
+                { backgroundColor: (loading || (step === 1 ? !isStep1Valid : !isStep2Valid)) ? theme.secondary + '66' : theme.secondary }, 
                 animatedButtonStyle
               ]}>
                 {loading ? (
@@ -400,6 +489,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  fieldErrorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
     fontWeight: '600',
   },
   footer: {

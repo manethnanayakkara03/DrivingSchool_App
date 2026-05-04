@@ -32,15 +32,57 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
-  const validate = () => {
-    let newErrors: any = {};
-    if (!formData.registrationNumber) newErrors.registrationNumber = 'Reg number is required';
-    if (!formData.maker) newErrors.maker = 'Make is required';
-    if (!formData.model) newErrors.model = 'Model is required';
-    if (!formData.year) newErrors.year = 'Year is required';
+  const validateField = (name: string, value: string) => {
+    let error = '';
+    switch (name) {
+      case 'registrationNumber':
+        if (!value) {
+          error = 'Registration number is required';
+        } else {
+          // Sri Lankan Vehicle Registration Formats:
+          // 1. Modern: WP CAA-1234 or CAA-1234
+          // 2. Vintage/Older: 18-1234 or 302-1234
+          const regRegex = /^([A-Z]{1,3}\s)?[A-Z]{1,3}-\d{4}$|^\d{1,3}-\d{4}$/;
+          if (!regRegex.test(value.toUpperCase())) {
+            error = 'Invalid format (e.g. WP CAA-1234 or 302-1234)';
+          }
+        }
+        break;
+      case 'maker':
+        if (!value) error = 'Maker is required';
+        else if (value.length < 2) error = 'Maker name too short';
+        break;
+      case 'model':
+        if (!value) error = 'Model is required';
+        else if (value.length < 2) error = 'Model name too short';
+        break;
+      case 'year':
+        const currentYear = new Date().getFullYear();
+        if (!value) {
+          error = 'Year is required';
+        } else {
+          const yearNum = parseInt(value);
+          if (isNaN(yearNum) || yearNum < 1950 || yearNum > currentYear + 1) {
+            error = `Year must be between 1950 and ${currentYear + 1}`;
+          }
+        }
+        break;
+      case 'assignedInstructor':
+        if (value && value.length < 3) error = 'Instructor name too short';
+        break;
+    }
+    setErrors((prev: any) => ({ ...prev, [name]: error }));
+    return !error;
+  };
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const validate = () => {
+    const fields = ['registrationNumber', 'maker', 'model', 'year'];
+    let isValid = true;
+    fields.forEach(field => {
+      const fieldValid = validateField(field, (formData as any)[field]);
+      if (!fieldValid) isValid = false;
+    });
+    return isValid;
   };
 
   const handleSubmit = async () => {
@@ -95,8 +137,12 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
               placeholder="e.g. WP CAA-1234"
               icon="car-sport-outline"
               value={formData.registrationNumber}
-              onChangeText={(t) => setFormData({...formData, registrationNumber: t})}
+              onChangeText={(t) => {
+                setFormData({...formData, registrationNumber: t});
+                validateField('registrationNumber', t);
+              }}
               error={errors.registrationNumber}
+              autoCapitalize="characters"
             />
             
             <View style={styles.row}>
@@ -105,7 +151,10 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
                   label="Make"
                   placeholder="e.g. Toyota"
                   value={formData.maker}
-                  onChangeText={(t) => setFormData({...formData, maker: t})}
+                  onChangeText={(t) => {
+                    setFormData({...formData, maker: t});
+                    validateField('maker', t);
+                  }}
                   error={errors.maker}
                 />
               </View>
@@ -114,7 +163,10 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
                   label="Model"
                   placeholder="e.g. Prius"
                   value={formData.model}
-                  onChangeText={(t) => setFormData({...formData, model: t})}
+                  onChangeText={(t) => {
+                    setFormData({...formData, model: t});
+                    validateField('model', t);
+                  }}
                   error={errors.model}
                 />
               </View>
@@ -126,8 +178,12 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
               icon="calendar-outline"
               keyboardType="numeric"
               value={formData.year}
-              onChangeText={(t) => setFormData({...formData, year: t})}
+              onChangeText={(t) => {
+                setFormData({...formData, year: t});
+                validateField('year', t);
+              }}
               error={errors.year}
+              maxLength={4}
             />
 
             {renderPicker('Transmission', formData.transmission, ['Manual', 'Automatic'], (v) => setFormData({...formData, transmission: v}))}
@@ -140,7 +196,11 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ visible, onClose, onSu
               placeholder="e.g. Sarath Kumara"
               icon="person-outline"
               value={formData.assignedInstructor}
-              onChangeText={(t) => setFormData({...formData, assignedInstructor: t})}
+              onChangeText={(t) => {
+                setFormData({...formData, assignedInstructor: t});
+                validateField('assignedInstructor', t);
+              }}
+              error={errors.assignedInstructor}
             />
 
             <View style={{ height: 40 }} />

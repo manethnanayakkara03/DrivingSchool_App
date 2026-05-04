@@ -51,13 +51,100 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
     }
   };
 
+  const validateField = (name: string, value: any) => {
+    let error = '';
+    const trimmedValue = value?.toString().trim() || '';
+
+    switch (name) {
+      case 'vehicle':
+        if (!trimmedValue) error = 'Vehicle selection is required';
+        break;
+      case 'vehicleModel':
+        if (!trimmedValue) error = 'Vehicle model is required';
+        else if (trimmedValue.length < 2) error = 'Model name too short (min 2 chars)';
+        else if (trimmedValue.length > 50) error = 'Model name too long (max 50 chars)';
+        break;
+      case 'type':
+        if (!trimmedValue) error = 'Maintenance type is required';
+        break;
+      case 'date':
+        if (!trimmedValue) {
+          error = 'Date is required';
+        } else {
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(trimmedValue)) {
+            error = 'Invalid format (YYYY-MM-DD)';
+          } else {
+            const date = new Date(trimmedValue);
+            const now = new Date();
+            
+            // Basic validity check
+            if (isNaN(date.getTime())) {
+              error = 'Invalid date';
+            } else {
+              // Range check
+              const minDate = new Date();
+              minDate.setFullYear(now.getFullYear() - 5); // 5 years ago
+              const maxDate = new Date();
+              maxDate.setFullYear(now.getFullYear() + 1); // 1 year ahead
+              
+              if (date < minDate) {
+                error = 'Date cannot be more than 5 years in the past';
+              } else if (date > maxDate) {
+                error = 'Date cannot be more than 1 year in the future';
+              }
+            }
+          }
+        }
+        break;
+      case 'cost':
+        if (!trimmedValue) {
+          error = 'Cost is required';
+        } else {
+          const costNum = parseFloat(trimmedValue);
+          if (isNaN(costNum)) {
+            error = 'Please enter a valid number';
+          } else if (costNum <= 0) {
+            error = 'Cost must be greater than 0';
+          } else if (costNum > 1000000) {
+            error = 'Cost cannot exceed 1,000,000 LKR';
+          }
+        }
+        break;
+      case 'notes':
+        if (!trimmedValue) {
+          error = 'Description is required';
+        } else if (trimmedValue.length < 10) {
+          error = 'Description too short (min 10 chars)';
+        } else if (trimmedValue.length > 500) {
+          error = 'Description too long (max 500 chars)';
+        }
+        break;
+    }
+    return error;
+  };
+
+  const updateField = (name: string, value: any) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    const error = validateField(name, value);
+    setErrors((prev: any) => ({ ...prev, [name]: error }));
+  };
+
   const validate = () => {
-    let newErrors: any = {};
-    if (!formData.vehicle) newErrors.vehicle = 'Vehicle selection is required';
-    if (!formData.date) newErrors.date = 'Date is required';
+    const fields = ['vehicle', 'vehicleModel', 'type', 'date', 'cost', 'notes'];
+    const newErrors: any = {};
+    let isValid = true;
+
+    fields.forEach(field => {
+      const error = validateField(field, (formData as any)[field]);
+      if (error) {
+        newErrors[field] = error;
+        isValid = false;
+      }
+    });
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return isValid;
   };
 
   const handleSubmit = async () => {
@@ -73,7 +160,7 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
     }
   };
 
-  const renderPicker = (label: string, value: string, options: string[], onSelect: (val: string) => void) => (
+  const renderPicker = (label: string, value: string, options: string[], onSelect: (val: string) => void, error?: string) => (
     <View style={styles.pickerContainer}>
       <Text style={[styles.pickerLabel, { color: theme.text }]}>{label}</Text>
       <View style={styles.pickerRow}>
@@ -82,7 +169,7 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
             key={opt}
             style={[
               styles.pickerOption,
-              { backgroundColor: theme.background, borderColor: value === opt ? theme.primary : theme.glassBorder },
+              { backgroundColor: theme.background, borderColor: value === opt ? theme.primary : (error ? '#EF4444' : theme.glassBorder) },
               value === opt && { backgroundColor: `${theme.primary}20` }
             ]}
             onPress={() => onSelect(opt)}
@@ -91,6 +178,7 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
           </TouchableOpacity>
         ))}
       </View>
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 
@@ -133,17 +221,18 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
               placeholder="e.g. Toyota Prius"
               icon="information-circle-outline"
               value={formData.vehicleModel}
-              onChangeText={(t) => setFormData({...formData, vehicleModel: t})}
+              onChangeText={(t) => updateField('vehicleModel', t)}
+              error={errors.vehicleModel}
             />
 
-            {renderPicker('Maintenance Type', formData.type, ['Service', 'Repair', 'Inspection'], (v) => setFormData({...formData, type: v}))}
+            {renderPicker('Maintenance Type', formData.type, ['Service', 'Repair', 'Inspection'], (v) => updateField('type', v), errors.type)}
 
             <FormInput
               label="Date"
               placeholder="YYYY-MM-DD"
               icon="calendar-outline"
               value={formData.date}
-              onChangeText={(t) => setFormData({...formData, date: t})}
+              onChangeText={(t) => updateField('date', t)}
               error={errors.date}
             />
 
@@ -153,7 +242,8 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
               icon="cash-outline"
               keyboardType="numeric"
               value={formData.cost}
-              onChangeText={(t) => setFormData({...formData, cost: t})}
+              onChangeText={(t) => updateField('cost', t)}
+              error={errors.cost}
             />
 
             <FormInput
@@ -164,7 +254,8 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
               numberOfLines={4}
               style={{ height: 100, textAlignVertical: 'top' }}
               value={formData.notes}
-              onChangeText={(t) => setFormData({...formData, notes: t})}
+              onChangeText={(t) => updateField('notes', t)}
+              error={errors.notes}
             />
 
             <View style={{ height: 40 }} />
@@ -211,6 +302,12 @@ export const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ visible, onClo
                         vehicle: item.registrationNumber,
                         vehicleModel: `${item.maker} ${item.model}`
                       });
+                      // Reset errors for these fields when auto-selected
+                      setErrors((prev: any) => ({ 
+                        ...prev, 
+                        vehicle: '', 
+                        vehicleModel: '' 
+                      }));
                       setVehiclePickerVisible(false);
                     }}
                   >
