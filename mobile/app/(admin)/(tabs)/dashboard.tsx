@@ -159,19 +159,30 @@ export default function AdminDashboard() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(600).delay(800)}>
-          {[1, 2, 3].map((item, index) => (
-            <GlassCard key={index} borderRadius={12} contentStyle={styles.activityCardContent} style={{ marginBottom: 8 }}>
-              <View style={[styles.activityIcon, { backgroundColor: `${theme.primary}20` }]}>
-                <Ionicons name="calendar-outline" size={20} color={theme.primary} />
-              </View>
-              <View style={styles.activityInfo}>
-                <Text style={[styles.activityTitle, { color: theme.text }]}>New Booking Request</Text>
-                <Text style={[styles.activityTime, { color: theme.muted }]}>2 hours ago • Kamal Perera</Text>
-              </View>
-              <StatusBadge status="Pending" />
-            </GlassCard>
-          ))}
+          {loading ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : stats?.recentActivity?.length > 0 ? (
+            stats.recentActivity.map((activity: any, index: number) => (
+              <GlassCard key={index} borderRadius={12} contentStyle={styles.activityCardContent} style={{ marginBottom: 8 }}>
+                <View style={[styles.activityIcon, { backgroundColor: `${theme.primary}20` }]}>
+                  <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                </View>
+                <View style={styles.activityInfo}>
+                  <Text style={[styles.activityTitle, { color: theme.text }]}>
+                    {activity.type === 'booking' ? 'New Booking Request' : 'New Enrollment'}
+                  </Text>
+                  <Text style={[styles.activityTime, { color: theme.muted }]}>
+                    {activity.learnerName} • {activity.courseTitle || activity.course || ''}
+                  </Text>
+                </View>
+                <StatusBadge status={activity.status || 'Pending'} />
+              </GlassCard>
+            ))
+          ) : (
+            <Text style={{ textAlign: 'center', opacity: 0.5, marginTop: 10 }}>No recent activity</Text>
+          )}
         </Animated.View>
+
 
       </ScrollView>
     </View>

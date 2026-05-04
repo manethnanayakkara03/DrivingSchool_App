@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity, ScrollView, Modal, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { paymentsApi } from '@/services/api';
+import { paymentsApi, adminApi } from '@/services/api';
+
 import { Alert } from 'react-native';
 
 export default function PaymentsPage() {
@@ -23,13 +24,34 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('All'); // All, Paid, Pending, Overdue
+  const [filter, setFilter] = useState('All'); // All, Paid, Pending, Awaiting Approval
+  
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedSlip, setSelectedSlip] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+
 
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const data = await paymentsApi.list();
-      setPayments(data);
+      const [paymentsData, pendingData] = await Promise.all([
+        paymentsApi.list(),
+        adminApi.getPendingEnrollments().catch(() => [])
+      ]);
+      
+      const mappedPending = pendingData.map((p: any) => ({
+        ...p,
+        _id: p._id || p.id,
+        learner: p.learnerName,
+        course: p.courseTitle,
+        amount: p.price,
+        status: 'Awaiting Approval',
+        method: p.paymentMethod,
+        date: new Date(p.createdAt).toLocaleDateString(),
+        isEnrollment: true
+      }));
+
+      setPayments([...mappedPending, ...paymentsData]);
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'Failed to fetch payments');
@@ -38,6 +60,7 @@ export default function PaymentsPage() {
       setRefreshing(false);
     }
   };
+
 
   useEffect(() => {
     fetchPayments();
@@ -57,6 +80,17 @@ export default function PaymentsPage() {
       Alert.alert('Error', error.message || 'Failed to update payment');
     }
   };
+
+  const approveEnrollment = async (id: string) => {
+    try {
+      await adminApi.approveEnrollment(id);
+      fetchPayments();
+      Alert.alert('Success', 'Enrollment approved successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to approve enrollment');
+    }
+  };
+
 
   const handleDelete = (id: string) => {
     Alert.alert(
@@ -101,9 +135,11 @@ export default function PaymentsPage() {
 
   const getAccentColor = (status: string) => {
     if (status === 'Paid') return theme.success;
+    if (status === 'Awaiting Approval') return theme.primary;
     if (status === 'Overdue') return '#EF4444';
     return '#F59E0B'; // Pending
   };
+
 
   const formatCurrency = (amount: number) => `LKR ${amount.toLocaleString()}`;
 
@@ -144,7 +180,32 @@ export default function PaymentsPage() {
           <StatusBadge status={item.status} />
         </View>
 
-        {item.status !== 'Paid' && (
+        {(item.paymentDetails?.slipImage || item.slipImage) && (
+          <TouchableOpacity 
+            style={[styles.slipPreviewBox, { backgroundColor: theme.background + '80' }]}
+            onPress={() => {
+              setSelectedSlip(item.paymentDetails?.slipImage || item.slipImage);
+              setModalVisible(true);
+            }}
+          >
+            <Ionicons name="image-outline" size={20} color={theme.primary} />
+            <Text style={[styles.slipText, { color: theme.text }]}>View Bank Slip</Text>
+          </TouchableOpacity>
+        )}
+
+        {item.status === 'Awaiting Approval' && (
+          <View style={styles.actionsRow}>
+            <TouchableOpacity 
+              style={[styles.payBtn, { backgroundColor: theme.primary }]} 
+              onPress={() => approveEnrollment(item._id)}
+            >
+              <Ionicons name="checkmark-done-circle" size={18} color="#FFF" />
+              <Text style={styles.payText}>Approve Enrollment</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {item.status === 'Pending' && !item.isEnrollment && (
           <View style={styles.actionsRow}>
             <TouchableOpacity 
               style={[styles.payBtn, { backgroundColor: theme.success }]} 
@@ -211,8 +272,10 @@ export default function PaymentsPage() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {renderFilterTab('All')}
           {renderFilterTab('Paid')}
+          {renderFilterTab('Awaiting Approval')}
           {renderFilterTab('Pending')}
           {renderFilterTab('Overdue')}
+
         </ScrollView>
       </View>
 
@@ -234,6 +297,50 @@ export default function PaymentsPage() {
           ) : null
         }
       />
+
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Payment Slip</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.imageContainer}>
+              {selectedSlip ? (
+                <>
+                  {imageLoading && (
+                    <ActivityIndicator style={styles.loader} size="large" color={theme.primary} />
+                  )}
+                  <Image 
+                    source={{ uri: selectedSlip }} 
+                    style={styles.fullImage}
+                    resizeMode="contain"
+                    onLoadStart={() => setImageLoading(true)}
+                    onLoadEnd={() => setImageLoading(false)}
+                  />
+                </>
+              ) : (
+                <Text style={{ color: theme.muted }}>No image available</Text>
+              )}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.closeBtn, { backgroundColor: theme.primary }]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.closeBtnText}>Close Preview</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -384,4 +491,76 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
+  slipPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  slipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '90%',
+    borderRadius: 24,
+    padding: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  imageContainer: {
+    width: '100%',
+    height: Dimensions.get('window').height * 0.6,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  fullImage: {
+    width: '100%',
+    height: '100%',
+  },
+  loader: {
+    position: 'absolute',
+    zIndex: 1,
+  },
+  closeBtn: {
+    marginTop: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  closeBtnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
+

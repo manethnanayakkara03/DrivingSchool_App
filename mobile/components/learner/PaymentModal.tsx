@@ -11,7 +11,9 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { FormInput } from '@/components/admin/FormInput';
+import { uploadApi } from '@/services/api';
 import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
+
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -65,10 +67,19 @@ export function PaymentModal({ visible, onClose, course, onComplete }: PaymentMo
 
     setLoading(true);
     try {
+      let finalSlipUrl = slipImage;
+      
+      // If we have a local slip image, upload it to Cloudinary first
+      if (paymentMethod === 'cash' && slipImage && !slipImage.startsWith('http')) {
+        const uploadRes = await uploadApi.uploadImage(slipImage);
+        finalSlipUrl = uploadRes.url;
+      }
+
       await onComplete({
         method: paymentMethod,
-        ...(paymentMethod === 'card' ? { cardDetails } : { slipImage }),
+        ...(paymentMethod === 'card' ? { cardDetails } : { slipImage: finalSlipUrl }),
       });
+
       // Reset state for next time
       setCardDetails({ number: '', expiry: '', cvv: '', holderName: '' });
       setSlipImage(null);

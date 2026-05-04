@@ -129,10 +129,19 @@ export default function PaymentsScreen() {
                     <ThemedText style={styles.txAmount}>
                       LKR {Number(payment.amount || 0).toLocaleString()}
                     </ThemedText>
-                    <View style={styles.paidBadge}>
-                      <ThemedText style={styles.paidText}>PAID</ThemedText>
+                    <View style={[
+                      styles.statusBadge,
+                      { backgroundColor: payment.status === 'completed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)' }
+                    ]}>
+                      <ThemedText style={[
+                        styles.statusText,
+                        { color: payment.status === 'completed' ? '#10B981' : '#F59E0B' }
+                      ]}>
+                        {payment.status === 'completed' ? 'PAID' : 'PENDING'}
+                      </ThemedText>
                     </View>
                   </View>
+
                 </GlassView>
               </Animated.View>
             ))
@@ -189,12 +198,12 @@ const styles = StyleSheet.create({
   txDate: { fontSize: 12, opacity: 0.45, marginTop: 3 },
   txRight: { alignItems: 'flex-end' },
   txAmount: { fontSize: 15, fontWeight: '800' },
-  paidBadge: {
-    backgroundColor: 'rgba(16,185,129,0.12)',
+  statusBadge: {
     paddingHorizontal: 8, paddingVertical: 3,
     borderRadius: 6, marginTop: 4,
   },
-  paidText: { fontSize: 10, fontWeight: '900', color: '#10B981' },
+  statusText: { fontSize: 10, fontWeight: '900' },
+
 
   emptyBox: { padding: 50, borderRadius: 28, alignItems: 'center', marginTop: 10 },
   emptyText: { fontSize: 15, opacity: 0.4, marginTop: 14, textAlign: 'center' },

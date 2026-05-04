@@ -24,13 +24,19 @@ export default function LearnerHomeScreen() {
 
   const [loading, setLoading] = useState(true);
   const [myCourses, setMyCourses] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+
 
   const fetchData = async () => {
     if (!user?.id) { setLoading(false); return; }
     try {
-      const courses = await learnerApi.getMyCourses(user.id);
+      const [courses, statsData] = await Promise.all([
+        learnerApi.getMyCourses(user.id),
+        learnerApi.getStats(user.id)
+      ]);
       setMyCourses(courses);
+      setStats(statsData);
     } catch (err) {
       console.error('Fetch data error:', err);
     } finally {
@@ -38,6 +44,7 @@ export default function LearnerHomeScreen() {
       setRefreshing(false);
     }
   };
+
 
   useEffect(() => { fetchData(); }, []);
   const onRefresh = () => { setRefreshing(true); fetchData(); };
@@ -80,16 +87,17 @@ export default function LearnerHomeScreen() {
               <View style={[styles.statIcon, { backgroundColor: theme.secondary + '20' }]}>
                 <Ionicons name="car" size={22} color={theme.secondary} />
               </View>
-              <ThemedText style={styles.statValue}>{myCourses.length}</ThemedText>
+              <ThemedText style={styles.statValue}>{stats?.enrolledCount ?? 0}</ThemedText>
               <ThemedText style={styles.statLabel}>Enrolled</ThemedText>
             </GlassView>
             <GlassView style={styles.statCard}>
               <View style={[styles.statIcon, { backgroundColor: '#10B98120' }]}>
                 <Ionicons name="time" size={22} color="#10B981" />
               </View>
-              <ThemedText style={styles.statValue}>--</ThemedText>
+              <ThemedText style={styles.statValue} numberOfLines={1}>{stats?.nextClass || '--'}</ThemedText>
               <ThemedText style={styles.statLabel}>Next Class</ThemedText>
             </GlassView>
+
           </Animated.View>
 
           {/* ── Section Title ── */}
@@ -225,8 +233,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 10,
   },
-  statValue: { fontSize: 22, fontWeight: '900' },
+  statValue: { fontSize: 16, fontWeight: '900' },
   statLabel: { fontSize: 11, opacity: 0.45, fontWeight: '600', marginTop: 2 },
+
 
   sectionRow: {
     flexDirection: 'row',

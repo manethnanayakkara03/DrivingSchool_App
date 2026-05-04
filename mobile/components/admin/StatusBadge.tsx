@@ -16,7 +16,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     if (['active', 'completed', 'paid', 'confirmed', 'good'].includes(s)) return theme.success;
     if (['inactive', 'cancelled', 'poor', 'overdue'].includes(s)) return '#EF4444'; // Red
     if (['pending', 'in progress', 'under maintenance', 'fair'].includes(s)) return '#F59E0B'; // Amber
+    if (['awaiting approval'].includes(s)) return theme.primary; // Blue
     if (['draft'].includes(s)) return theme.muted;
+
     return theme.primary;
   };
 

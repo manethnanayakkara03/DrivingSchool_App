@@ -86,7 +86,9 @@ app.use('/api/auth',        require('./routes/auth'));
 app.use('/api/learner',     require('./routes/learner'));
 app.use('/api/dashboard',   require('./routes/dashboard'));
 app.use('/api/report',      require('./routes/report'));
+app.use('/api/upload',      require('./routes/upload'));
 app.use('/api/instructor',  require('./routes/instructor'));
+
 app.use('/api/learners',    crudRouter(Learner,     'DS'));
 app.use('/api/instructors', crudRouter(Instructor,  'INS'));
 app.use('/api/vehicles',    crudRouter(Vehicle,     'VH'));

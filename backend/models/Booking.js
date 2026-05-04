@@ -1,17 +1,21 @@
 const mongoose = require('mongoose');
 
 const BookingSchema = new mongoose.Schema({
-  name:       { type: String, required: true },
-  nic:        { type: String },   // date
-  phone:      { type: String },   // time
-  course:     { type: String },
-  instructor: { type: String },
-  idCode:     { type: String },
-  progress:   { type: Number, default: 0 },
-  totalLessons: { type: Number, default: 10 },
-  status:     { type: String, default: 'Active' },
-  color:      { type: String },
-  image:      { type: String },
+  learnerId:    { type: String },
+  learnerName:  { type: String, required: true },
+  instructorId: { type: String },
+  instructorName: { type: String },
+  vehicleId:    { type: String },
+  vehicleName:  { type: String },
+  date:         { type: String, required: true }, // e.g. "2023-11-25"
+  time:         { type: String, required: true }, // e.g. "10:00 AM"
+  duration:     { type: String, default: '1 Hour' },
+  status:       { type: String, enum: ['Pending', 'Confirmed', 'Cancelled'], default: 'Pending' },
+  courseId:     { type: String },
+  courseTitle:  { type: String },
+  idCode:       { type: String },
+  color:        { type: String },
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Booking', BookingSchema);

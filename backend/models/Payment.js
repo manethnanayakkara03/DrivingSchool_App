@@ -11,6 +11,7 @@ const PaymentSchema = new mongoose.Schema({
   status:      { type: String, default: 'Pending' },
   idCode:      { type: String },
   color:       { type: String },
+  slipImage:   { type: String },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Payment', PaymentSchema);

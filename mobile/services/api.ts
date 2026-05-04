@@ -77,7 +77,9 @@ export const learnerApi = {
   enroll: (learnerId: string, courseId: string, paymentData?: any) => 
     request<any>('POST', '/api/learner/enroll', { learnerId, courseId, paymentData }),
   getMyCourses: (learnerId: string) => request<any[]>('GET', `/api/learner/my-courses/${learnerId}`),
+  getStats:     (learnerId: string) => request<any>('GET', `/api/learner/stats/${learnerId}`),
   pay: (enrollmentId: string, amount: number, method: string) => 
+
     request<any>('POST', '/api/learner/pay', { enrollmentId, amount, method }),
   getMyPayments: (learnerId: string) => request<any[]>('GET', `/api/learner/my-payments/${learnerId}`),
   updateProfile: (id: string, data: any) => request<any>('PUT', `/api/learner/profile/${id}`, data),
@@ -102,6 +104,38 @@ export const dashboardApi = {
       'GET', '/api/dashboard/stats'
     ),
 };
+
+// ─── upload ───────────────────────────────────────────────────────────────────
+
+export const uploadApi = {
+  uploadImage: async (uri: string) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop() || 'upload.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : `image`;
+
+    formData.append('image', {
+      uri,
+      name: filename,
+      type,
+    } as any);
+
+    const res = await fetch(`${BASE_URL}/api/upload/image`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'multipart/form-data',
+        ...(_token ? { Authorization: `Bearer ${_token}` } : {}),
+      },
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Upload failed');
+    return data as { url: string; public_id: string };
+  },
+};
+
 
 // ─── report ───────────────────────────────────────────────────────────────────
 
@@ -144,7 +178,14 @@ function resourceApi(resource: string) {
   };
 }
 
+export const adminApi = {
+  getPendingEnrollments: () => request<any[]>('GET', '/api/learner/pending-enrollments'),
+  getEnrolledStudents:   () => request<any[]>('GET', '/api/learner/enrolled-students'),
+  approveEnrollment: (id: string) => request<any>('POST', `/api/learner/approve-enrollment/${id}`),
+};
+
 export const learnersApi    = resourceApi('learners');
+
 export const instructorsApi = resourceApi('instructors');
 export const vehiclesApi    = resourceApi('vehicles');
 export const bookingsApi    = resourceApi('bookings');

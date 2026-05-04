@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, RefreshControl, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +11,8 @@ import { EmptyState } from '@/components/admin/EmptyState';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { bookingsApi, adminApi } from '@/services/api';
+
 
 export default function BookingsPage() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -17,20 +20,25 @@ export default function BookingsPage() {
   const navigation = useNavigation<DrawerNavigationProp<any>>();
 
   const [bookings, setBookings] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('All'); // All, Pending, Confirmed, Cancelled
+  const [filter, setFilter] = useState('All'); // All, Pending, Confirmed, Cancelled, Unscheduled, Learners
 
   const fetchBookings = async () => {
     try {
-      // Mock data
-      setBookings([
-        { id: '1', learner: 'Kamal Perera', instructor: 'Sarath Kumara', vehicle: 'WP CAA-1234', date: '2023-11-25', time: '10:00 AM', duration: '2 Hours', status: 'Pending' },
-        { id: '2', learner: 'Nimal Silva', instructor: 'Nishantha Silva', vehicle: 'WP CAR-5678', date: '2023-11-26', time: '02:00 PM', duration: '1 Hour', status: 'Confirmed' },
+      setLoading(true);
+      const [bookingsData, enrollmentsData] = await Promise.all([
+        bookingsApi.list(),
+        adminApi.getEnrolledStudents().catch(() => [])
       ]);
-    } catch (error) {
+      
+      setBookings(bookingsData);
+      setEnrollments(enrollmentsData);
+    } catch (error: any) {
       console.error(error);
+      Alert.alert('Error', error.message || 'Failed to fetch bookings');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -46,15 +54,58 @@ export default function BookingsPage() {
     fetchBookings();
   };
 
-  const updateStatus = (id: string, newStatus: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      await bookingsApi.update(id, { status: newStatus });
+      fetchBookings();
+      Alert.alert('Success', `Booking ${newStatus.toLowerCase()} successfully`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update booking');
+    }
   };
 
-  const filteredBookings = bookings.filter(b => {
-    const matchesSearch = b.learner.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filter === 'All' || b.status === filter;
-    return matchesSearch && matchesFilter;
+  const displayData = (() => {
+    if (filter === 'Learners') {
+      return enrollments.map(e => ({
+        ...e,
+        id: e._id || e.id,
+        learnerName: e.learnerName,
+        courseTitle: e.courseTitle,
+        date: 'Enrolled',
+        time: 'No Classes Yet',
+        status: 'Enrolled',
+        isEnrollment: true
+      }));
+    }
+    
+    if (filter === 'All') {
+      const enrollmentPlaceholders = enrollments.map(e => ({
+        ...e,
+        id: e._id || e.id,
+        learnerName: e.learnerName,
+        courseTitle: e.courseTitle,
+        date: 'Enrolled',
+        time: 'New Student',
+        status: 'Enrolled',
+        isEnrollment: true
+      }));
+      return [...bookings, ...enrollmentPlaceholders];
+    }
+
+    return bookings;
+  })();
+
+  const filteredBookings = displayData.filter(b => {
+    const name = b.learnerName || b.learner || '';
+    const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (filter === 'All') return matchesSearch;
+    if (filter === 'Learners') return matchesSearch;
+    if (filter === 'Unscheduled') return matchesSearch && b.date === 'Not Set';
+    
+    return matchesSearch && b.status === filter;
   });
+
 
   const stats = {
     total: bookings.length,
@@ -66,44 +117,52 @@ export default function BookingsPage() {
   const getAccentColor = (status: string) => {
     if (status === 'Confirmed') return theme.success;
     if (status === 'Cancelled') return '#EF4444';
+    if (status === 'Enrolled') return theme.primary;
     return '#F59E0B'; // Pending
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <GlassCard borderRadius={16} contentStyle={styles.cardContent} accentColor={getAccentColor(item.status)}>
-      <View style={styles.cardHeader}>
-        <View style={styles.learnerRow}>
-          <View style={[styles.avatar, { backgroundColor: `${theme.primary}20` }]}>
-            <Text style={[styles.avatarText, { color: theme.primary }]}>{item.learner.charAt(0)}</Text>
+  const renderItem = ({ item }: { item: any }) => {
+    const name = item.learnerName || item.learner || 'Unknown';
+    
+    return (
+      <GlassCard borderRadius={16} contentStyle={styles.cardContent} accentColor={getAccentColor(item.status)}>
+        <View style={styles.cardHeader}>
+          <View style={styles.learnerRow}>
+            <View style={[styles.avatar, { backgroundColor: `${theme.primary}20` }]}>
+              <Text style={[styles.avatarText, { color: theme.primary }]}>{name.charAt(0)}</Text>
+            </View>
+            <Text style={[styles.learnerName, { color: theme.text }]}>{name}</Text>
           </View>
-          <Text style={[styles.learnerName, { color: theme.text }]}>{item.learner}</Text>
+          <StatusBadge status={item.status} />
         </View>
-        <StatusBadge status={item.status} />
-      </View>
+ 
+        <View style={styles.dateTimeContainer}>
+          <View style={styles.dateTimeItem}>
+            <Ionicons name="calendar-outline" size={16} color={theme.icon} />
+            <Text style={[styles.dateTimeText, { color: theme.text }]}>{item.date}</Text>
+          </View>
+          <View style={styles.dateTimeItem}>
+            <Ionicons name="time-outline" size={16} color={theme.icon} />
+            <Text style={[styles.dateTimeText, { color: theme.text }]}>{item.time} ({item.duration})</Text>
+          </View>
+        </View>
+ 
+        <View style={[styles.infoBox, { backgroundColor: theme.background }]}>
+          <View style={styles.infoRow}>
+            <Ionicons name="book-outline" size={14} color={theme.muted} />
+            <Text style={[styles.infoText, { color: theme.muted }]}>{item.courseTitle || 'General'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="person-outline" size={14} color={theme.muted} />
+            <Text style={[styles.infoText, { color: theme.muted }]}>{item.instructorName || item.instructor}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="car-outline" size={14} color={theme.muted} />
+            <Text style={[styles.infoText, { color: theme.muted }]}>{item.vehicleName || item.vehicle}</Text>
+          </View>
+        </View>
 
-      <View style={styles.dateTimeContainer}>
-        <View style={styles.dateTimeItem}>
-          <Ionicons name="calendar-outline" size={16} color={theme.icon} />
-          <Text style={[styles.dateTimeText, { color: theme.text }]}>{item.date}</Text>
-        </View>
-        <View style={styles.dateTimeItem}>
-          <Ionicons name="time-outline" size={16} color={theme.icon} />
-          <Text style={[styles.dateTimeText, { color: theme.text }]}>{item.time} ({item.duration})</Text>
-        </View>
-      </View>
-
-      <View style={[styles.infoBox, { backgroundColor: theme.background }]}>
-        <View style={styles.infoRow}>
-          <Ionicons name="person-outline" size={14} color={theme.muted} />
-          <Text style={[styles.infoText, { color: theme.muted }]}>{item.instructor}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="car-outline" size={14} color={theme.muted} />
-          <Text style={[styles.infoText, { color: theme.muted }]}>{item.vehicle}</Text>
-        </View>
-      </View>
-
-      {item.status === 'Pending' && (
+      {item.status === 'Pending' && !item.isEnrollment && (
         <View style={styles.actionsRow}>
           <TouchableOpacity 
             style={[styles.actionBtn, styles.cancelBtn]} 
@@ -119,8 +178,20 @@ export default function BookingsPage() {
           </TouchableOpacity>
         </View>
       )}
+
+      {item.isEnrollment && (
+        <View style={styles.actionsRow}>
+          <TouchableOpacity 
+            style={[styles.actionBtn, { backgroundColor: theme.primary }]} 
+            onPress={() => Alert.alert('Schedule', 'Scheduling feature coming soon!')}
+          >
+            <Text style={styles.confirmText}>Schedule Lesson</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </GlassCard>
   );
+};
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -162,38 +233,58 @@ export default function BookingsPage() {
       </View>
 
       <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[
-            styles.filterTab,
-            { backgroundColor: filter === 'All' ? theme.primary : theme.card, borderColor: theme.glassBorder },
-          ]}
-          onPress={() => setFilter('All')}
-        >
-          <Text style={[styles.filterText, { color: filter === 'All' ? '#FFF' : theme.text }]}>All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterTab,
-            { backgroundColor: filter === 'Pending' ? '#F59E0B' : theme.card, borderColor: filter === 'Pending' ? '#F59E0B' : theme.glassBorder },
-          ]}
-          onPress={() => setFilter('Pending')}
-        >
-          <Text style={[styles.filterText, { color: filter === 'Pending' ? '#FFF' : theme.text }]}>Pending</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterTab,
-            { backgroundColor: filter === 'Confirmed' ? theme.success : theme.card, borderColor: filter === 'Confirmed' ? theme.success : theme.glassBorder },
-          ]}
-          onPress={() => setFilter('Confirmed')}
-        >
-          <Text style={[styles.filterText, { color: filter === 'Confirmed' ? '#FFF' : theme.text }]}>Confirmed</Text>
-        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          <TouchableOpacity
+            style={[
+              styles.filterTab,
+              { backgroundColor: filter === 'All' ? theme.primary : theme.card, borderColor: theme.glassBorder },
+            ]}
+            onPress={() => setFilter('All')}
+          >
+            <Text style={[styles.filterText, { color: filter === 'All' ? '#FFF' : theme.text }]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterTab,
+              { backgroundColor: filter === 'Pending' ? '#F59E0B' : theme.card, borderColor: filter === 'Pending' ? '#F59E0B' : theme.glassBorder },
+            ]}
+            onPress={() => setFilter('Pending')}
+          >
+            <Text style={[styles.filterText, { color: filter === 'Pending' ? '#FFF' : theme.text }]}>Pending</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterTab,
+              { backgroundColor: filter === 'Confirmed' ? theme.success : theme.card, borderColor: filter === 'Confirmed' ? theme.success : theme.glassBorder },
+            ]}
+            onPress={() => setFilter('Confirmed')}
+          >
+            <Text style={[styles.filterText, { color: filter === 'Confirmed' ? '#FFF' : theme.text }]}>Confirmed</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterTab,
+              { backgroundColor: filter === 'Unscheduled' ? theme.primary : theme.card, borderColor: filter === 'Unscheduled' ? theme.primary : theme.glassBorder },
+            ]}
+            onPress={() => setFilter('Unscheduled')}
+          >
+            <Text style={[styles.filterText, { color: filter === 'Unscheduled' ? '#FFF' : theme.text }]}>Unscheduled</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterTab,
+              { backgroundColor: filter === 'Learners' ? theme.primary : theme.card, borderColor: theme.glassBorder },
+            ]}
+            onPress={() => setFilter('Learners')}
+          >
+            <Text style={[styles.filterText, { color: filter === 'Learners' ? '#FFF' : theme.text }]}>All Students</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       <FlatList
         data={filteredBookings}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => item.id || item._id || index.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -266,10 +357,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   filterContainer: {
-    flexDirection: 'row',
     paddingHorizontal: 20,
     marginBottom: 16,
-    gap: 8,
   },
   filterTab: {
     paddingHorizontal: 16,
@@ -368,3 +457,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+

@@ -2,6 +2,30 @@ const router = require('express').Router();
 const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
 const User = require('../models/User');
+const Booking = require('../models/Booking');
+const Payment = require('../models/Payment');
+
+
+// Get learner's dashboard stats (counts, next class)
+router.get('/stats/:learnerId', async (req, res) => {
+  try {
+    const [enrollmentCount, nextClass] = await Promise.all([
+      Enrollment.countDocuments({ learnerId: req.params.learnerId }),
+      Booking.findOne({ 
+        learnerId: req.params.learnerId, 
+        status: 'Confirmed' 
+      }).sort({ date: 1, time: 1 })
+    ]);
+
+    res.json({
+      enrolledCount: enrollmentCount,
+      nextClass: nextClass ? `${nextClass.date} at ${nextClass.time}` : 'None Scheduled'
+    });
+  } catch (err) {
+    console.error('Fetch learner stats error:', err);
+    res.status(500).json({ message: 'Failed to fetch stats' });
+  }
+});
 
 // ─── courses ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +57,7 @@ router.post('/enroll', async (req, res) => {
     const { learnerId, courseId, paymentData } = req.body;
     if (!learnerId || !courseId) return res.status(400).json({ message: 'IDs required' });
 
+    const learner = await User.findById(learnerId);
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: 'Course not found' });
 
@@ -42,6 +67,7 @@ router.post('/enroll', async (req, res) => {
 
     const enrollment = await Enrollment.create({
       learnerId,
+      learnerName: learner?.name || 'Unknown Learner',
       courseId,
       courseTitle: course.title,
       price: course.price,
@@ -126,18 +152,19 @@ router.post('/pay', async (req, res) => {
 // Get learner's payment history
 router.get('/my-payments/:learnerId', async (req, res) => {
   try {
-    // Payments are derived from paid enrollments
-    const paidEnrollments = await Enrollment.find({
+    // Show all enrollments as payment items
+    const enrollments = await Enrollment.find({
       learnerId: req.params.learnerId,
-      paymentStatus: 'paid',
     }).sort({ updatedAt: -1 });
 
-    const payments = paidEnrollments.map(e => ({
+    const payments = enrollments.map(e => ({
       id: e._id,
       learnerId: e.learnerId,
       courseTitle: e.courseTitle,
       amount: e.price,
-      status: 'completed',
+      status: e.paymentStatus === 'paid' ? 'completed' : 'pending',
+      method: e.paymentMethod,
+      slipUrl: e.paymentDetails?.slipImage,
       createdAt: e.updatedAt || e.createdAt,
     }));
 
@@ -147,6 +174,74 @@ router.get('/my-payments/:learnerId', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch payments' });
   }
 });
+
+// Admin: Get all enrollments pending approval
+router.get('/pending-enrollments', async (req, res) => {
+  try {
+    const enrollments = await Enrollment.find({ status: 'pending_approval' }).sort({ createdAt: -1 });
+    res.json(enrollments);
+  } catch (err) {
+    console.error('Fetch pending error:', err);
+    res.status(500).json({ message: 'Failed to fetch pending enrollments' });
+  }
+});
+
+// Admin: Get all successfully enrolled students
+router.get('/enrolled-students', async (req, res) => {
+  try {
+    const enrollments = await Enrollment.find({ status: 'enrolled' }).sort({ createdAt: -1 });
+    res.json(enrollments);
+  } catch (err) {
+    console.error('Fetch enrolled error:', err);
+    res.status(500).json({ message: 'Failed to fetch enrolled students' });
+  }
+});
+
+// Admin: Approve enrollment
+router.post('/approve-enrollment/:id', async (req, res) => {
+  try {
+    const enrollment = await Enrollment.findByIdAndUpdate(
+      req.params.id,
+      { status: 'enrolled', paymentStatus: 'paid' },
+      { new: true }
+    );
+    if (!enrollment) return res.status(404).json({ message: 'Enrollment not found' });
+
+    // 1. Create a formal Payment record
+    await Payment.create({
+      studentName: enrollment.learnerName,
+      course: enrollment.courseTitle,
+      totalFee: enrollment.price.toString(),
+      amountPaid: enrollment.price.toString(),
+      balance: '0',
+      method: enrollment.paymentMethod || 'Cash',
+      date: new Date().toLocaleDateString(),
+      status: 'Paid',
+      slipImage: enrollment.paymentDetails?.slipImage,
+    });
+
+    // 2. Create a placeholder Booking record for the admin to schedule
+    await Booking.create({
+      learnerId: enrollment.learnerId,
+      learnerName: enrollment.learnerName,
+      courseId: enrollment.courseId,
+      courseTitle: enrollment.courseTitle,
+      instructorName: 'TBD',
+      vehicleName: 'TBD',
+      date: 'Not Set',
+      time: 'Not Set',
+      duration: '1 Hour',
+      status: 'Pending',
+    });
+
+    res.json(enrollment);
+  } catch (err) {
+    console.error('Approval error:', err);
+    res.status(500).json({ message: 'Approval failed' });
+  }
+});
+
+
 
 // ─── profile ──────────────────────────────────────────────────────────────────
 
